@@ -14,7 +14,7 @@ API_HASH = os.getenv('API_HASH', '')
 CHANNEL_URL = os.getenv('CHANNEL_URL', '')
 COUNT_DAYS = int(os.getenv('COUNT_DAYS', 0))
 
-# Настройки базы данных
+# Настройкollи базы данных
 POSTGRES_DB = os.getenv('POSTGRES_DB')
 POSTGRES_USER = os.getenv('POSTGRES_USER')
 POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
@@ -39,10 +39,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS signals (
                 id SERIAL PRIMARY KEY,
                 symbol VARCHAR(50) NOT NULL,
-                action VARCHAR(5) NOT NULL CHECK (action IN ('buy', 'sell')),
-                price NUMERIC(19, 8),
-                profit_percentage NUMERIC(5, 2),
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                price_buy NUMERIC(19, 8),
+                buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                price_sell NUMERIC(19, 8),
+                sell_timestamp TIMESTAMP,
+                profit_percentage NUMERIC(5, 2)
             )
             """
             connection.execute(text(create_table_query))
@@ -65,7 +66,7 @@ def parse_signal(text: str) -> Union[dict, None]:
         price = float(match_buy.group(2))
         return {"symbol": symbol,
                 "action": "buy",
-                "price": price}
+                "price_buy": price}
 
     match_sell = sell_pattern.search(text)
     if match_sell:
@@ -74,31 +75,32 @@ def parse_signal(text: str) -> Union[dict, None]:
         price = float(match_sell.group(3))
         return {"symbol": symbol,
                 "action": "sell",
-                "price": price,
+                "price_sell": price,
                 "profit_percentage": profit_percentage}
 
     return None
 
 
-def save_signal(signal: dict, timestamp: datetime):
+def save_signal(signal: dict):
     """Сохранение сигнала в базе данных."""
 
     with engine.connect() as connection:
         try:
             insert_query = text("""
-                INSERT INTO signals (symbol, action, price, profit_percentage, timestamp)
-                VALUES (:symbol, :action, :price, :profit_percentage, :timestamp)
+                INSERT INTO signals (symbol, price_buy, buy_timestamp, price_sell, sell_timestamp, profit_percentage)
+                VALUES (:symbol, :price_buy, :timestamp, NULL, NULL, NULL)
             """)
-            connection.execute(
-                insert_query,
-                {
-                    "symbol": signal["symbol"],
-                    "action": signal["action"],
-                    "price": signal.get("price"),
-                    "profit_percentage": signal.get("profit_percentage", None),
-                    "timestamp": timestamp,
-                },
-            )
+
+            update_query = text("""
+                UPDATE signals
+                SET price_sell = :price_sell, sell_timestamp = :timestamp, profit_percentage = :profit_percentage
+                WHERE symbol = :symbol AND price_sell IS NULL
+            """)
+
+            if signal.get("price_buy") is not None:
+                connection.execute(insert_query, signal)
+            elif signal.get("price_sell") is not None:
+                connection.execute(update_query, signal)
             connection.commit()
         except SQLAlchemyError as e:
             logger.error(f"Ошибка сохранения сигнала: {e}")
@@ -116,13 +118,18 @@ def parse_recent_signals(client: TelegramClient):
 
     # Загрузка старых сообщений
     for message in client.iter_messages(entity, offset_date=from_date, reverse=True):
-        print(message)
         if isinstance(message, Message) and message.message:
             signal = parse_signal(message.message)
             if signal:
-                message.date += timedelta(hours=3)
-                save_signal(signal, message.date)
-                logger.info(f"Сигнал из истории сохранен: {signal} с датой: {message.date}")
+                process_signal = {
+                    "symbol": signal["symbol"],
+                    "price_buy": signal.get("price_buy", None),
+                    "price_sell": signal.get("price_sell", None),
+                    "timestamp": message.date + timedelta(hours=3),
+                    "profit_percentage": signal.get("profit_percentage", None)
+                }
+                save_signal(process_signal)
+                logger.info(f"Сигнал из истории сохранен: {process_signal} с датой: {message.date}")
 
     logger.info("Завершен парсинг старых сообщений.")
 
