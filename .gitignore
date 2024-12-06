@@ -1,6 +1,7 @@
 # Основные файлы с секретными данными
 *.env
 *.session
+instructions.txt
 
 # Виртуальное окружение Python
 .ipynb_checkpoints/
