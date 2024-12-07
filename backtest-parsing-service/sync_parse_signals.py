@@ -8,6 +8,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
+from queries import *
+
 # Загрузка переменных окружения
 API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '')
@@ -26,45 +28,17 @@ DROP_TABLE = os.getenv('DROP_TABLE', 'false').lower() == 'true'
 # Создаем синхронный движок для работы с базой данных
 engine = create_engine(DATABASE_URL, echo=False)
 
-create_table_query = """
-    CREATE TABLE IF NOT EXISTS signals (
-        id SERIAL PRIMARY KEY,
-        symbol VARCHAR(50) NOT NULL,
-        price_buy NUMERIC(19, 8),
-        buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        price_sell NUMERIC(19, 8),
-        sell_timestamp TIMESTAMP,
-        auto_profit_percentage NUMERIC(5, 2),
-        manual_profit_percentage NUMERIC(5, 2)
-    )
-"""
-active_buy_query = text("""
-                SELECT * FROM signals
-                WHERE symbol = :symbol AND price_sell IS NULL
-            """)
-insert_query = text("""
-    INSERT INTO signals (symbol, price_buy, buy_timestamp, price_sell, sell_timestamp, auto_profit_percentage, manual_profit_percentage)
-    VALUES (:symbol, :price_buy, :timestamp, NULL, NULL, NULL, NULL)
-""")
-update_query = text("""
-    UPDATE signals
-    SET
-        price_sell = :price_sell,
-        sell_timestamp = :timestamp,
-        auto_profit_percentage = :profit_percentage,
-        manual_profit_percentage = (:price_sell / price_buy - 1) * 100
-    WHERE symbol = :symbol AND price_sell IS NULL
-""")
-
 def init_db():
     """Инициализация схемы базы данных."""
     with engine.connect() as connection:
         try:
             if DROP_TABLE:
-                connection.execute(text("DROP TABLE IF EXISTS signals"))
+                connection.execute(text("DROP TABLE IF EXISTS trades"))
+                connection.execute(text("DROP TABLE IF EXISTS actions"))
                 connection.commit()
-                logger.info("Таблица удалена.")
-            connection.execute(text(create_table_query))
+                logger.info("Таблицы удалены.")
+            connection.execute(text(create_trades_table_query))
+            connection.execute(text(create_actions_table_query))
             connection.commit()
             logger.info("Схема базы данных успешно инициализирована.")
         except SQLAlchemyError as e:
@@ -102,18 +76,25 @@ def parse_signal(text: str) -> Union[dict, None]:
 def save_signal(signal: dict):
     """Сохранение сигнала в базе данных."""
 
+    action_signal = {'symbol': signal["symbol"],
+                     'action': 'buy' if signal.get("price_sell") is None else 'sell',
+                     'price': signal.get("price_buy") if signal.get("price_sell") is None else signal.get("price_sell"),
+                     'timestamp': signal['timestamp']}
+
     with engine.connect() as connection:
         try:
             if signal.get("price_buy") is not None:
-                result = connection.execute(active_buy_query,
+                result = connection.execute(text(active_buy_query),
                                             {"symbol": signal["symbol"]})
-                active_buy_flag = result.scalar_one_or_none()
+                active_buy_flag = result.scalar_one_or_none() == 'buy'
                 if active_buy_flag:
                     logger.info(f"Активная покупка для {signal['symbol']} уже существует. Пропуск нового сигнала на покупку.")
                 else:
-                    connection.execute(insert_query, signal)
+                    connection.execute(text(insert_action_query), action_signal)
+                    connection.execute(text(insert_trade_query), signal)
             elif signal.get("price_sell") is not None:
-                connection.execute(update_query, signal)
+                connection.execute(text(insert_action_query), action_signal)
+                connection.execute(text(update_trade_query), signal)
             connection.commit()
             logger.info(f"Сигнал сохранен: {signal}")
         except SQLAlchemyError as e:

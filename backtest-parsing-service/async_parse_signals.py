@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
+from queries import *
+
 # Загрузка переменных окружения
 API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '')
@@ -28,45 +30,16 @@ DROP_TABLE = os.getenv('DROP_TABLE', 'false').lower() == 'true'
 # Создаем асинхронный движок для работы с базой данных
 async_engine = create_async_engine(DATABASE_URL, echo=False)
 
-# Запросы к базе
-create_table_query = """
-    CREATE TABLE IF NOT EXISTS signals (
-        id SERIAL PRIMARY KEY,
-        symbol VARCHAR(50) NOT NULL,
-        price_buy NUMERIC(19, 8),
-        buy_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        price_sell NUMERIC(19, 8),
-        sell_timestamp TIMESTAMP,
-        auto_profit_percentage NUMERIC(5, 2),
-        manual_profit_percentage NUMERIC(5, 2)
-    )
-"""
-active_buy_query = text("""
-                SELECT * FROM signals
-                WHERE symbol = :symbol AND price_sell IS NULL
-            """)
-insert_query = text("""
-    INSERT INTO signals (symbol, price_buy, buy_timestamp, price_sell, sell_timestamp, auto_profit_percentage, manual_profit_percentage)
-    VALUES (:symbol, :price_buy, :timestamp, NULL, NULL, NULL, NULL)
-""")
-update_query = text("""
-    UPDATE signals
-    SET
-        price_sell = :price_sell,
-        sell_timestamp = :timestamp,
-        auto_profit_percentage = :profit_percentage,
-        manual_profit_percentage = (:price_sell / price_buy - 1) * 100
-    WHERE symbol = :symbol AND price_sell IS NULL
-""")
-
 async def init_db():
     """Инициализация схемы базы данных."""
     async with async_engine.begin() as connection:
         try:
             if DROP_TABLE:
-                await connection.execute(text("DROP TABLE IF EXISTS signals"))
-                logger.info("Таблица удалена.")
-            await connection.execute(text(create_table_query))
+                await connection.execute(text("DROP TABLE IF EXISTS trades"))
+                await connection.execute(text("DROP TABLE IF EXISTS actions"))
+                logger.info("Таблицы удалены.")
+            await connection.execute(text(create_trades_table_query))
+            await connection.execute(text(create_actions_table_query))
             logger.info("Схема базы данных успешно инициализирована.")
         except SQLAlchemyError as e:
             logger.error(f"Ошибка инициализации базы данных: {e}")
@@ -114,18 +87,25 @@ def parse_signal(text: str) -> Union[dict, None]:
 async def save_signal(signal: dict):
     """Сохранение сигнала в базе данных."""
 
+    action_signal = {'symbol': signal["symbol"],
+                     'action': 'buy' if signal.get("price_sell") is None else 'sell',
+                     'price': signal.get("price_buy") if signal.get("price_sell") is None else signal.get("price_sell"),
+                     'timestamp': signal['timestamp']}
+
     async with async_engine.connect() as connection:
         try:
             if signal.get("price_buy") is not None:
-                result = await connection.execute(active_buy_query,
+                result = await connection.execute(text(active_buy_query),
                                                   {"symbol": signal["symbol"]})
-                active_buy_flag = result.scalar_one_or_none()
+                active_buy_flag = result.scalar_one_or_none() == 'buy'
                 if active_buy_flag:
                     logger.info(f"Активная покупка для {signal['symbol']} уже существует. Пропуск нового сигнала на покупку.")
                 else:
-                    await connection.execute(insert_query, signal)
+                    await connection.execute(text(insert_action_query), action_signal)
+                    await connection.execute(text(insert_trade_query), signal)
             elif signal.get("price_sell") is not None:
-                await connection.execute(update_query, signal)
+                await connection.execute(text(insert_action_query), action_signal)
+                await connection.execute(text(update_trade_query), signal)
             await connection.commit()
             logger.info(f"Сигнал сохранен: {signal}")
         except SQLAlchemyError as e:
@@ -171,6 +151,7 @@ async def main():
         await parse_recent_signals(client)
     finally:
         await client.disconnect()
+        logger.info("Клиент Telegram отключен.")
 
 
 if __name__ == "__main__":
