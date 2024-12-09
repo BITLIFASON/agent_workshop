@@ -45,3 +45,14 @@ insert_action_query = """
     INSERT INTO actions (symbol, action, price, timestamp)
     VALUES (:symbol, :action, :price, :timestamp)
 """
+
+calc_profit_query = """
+    SELECT
+        DATE_TRUNC('month', buy_timestamp) AS month,
+        SUM(auto_profit_percentage) AS sum_auto_profit_percentage,
+        SUM(manual_profit_percentage) AS sum_manual_profit_percentage
+    FROM trades
+    WHERE auto_profit_percentage < 100 AND price_sell IS NOT NULL
+    GROUP BY month
+    ORDER BY month;
+"""

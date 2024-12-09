@@ -94,18 +94,21 @@ async def save_signal(signal: dict):
 
     async with async_engine.connect() as connection:
         try:
+            result = await connection.execute(text(active_buy_query),
+                                              {"symbol": signal["symbol"]})
+            active_buy_flag = result.scalar_one_or_none() == 'buy'
             if signal.get("price_buy") is not None:
-                result = await connection.execute(text(active_buy_query),
-                                                  {"symbol": signal["symbol"]})
-                active_buy_flag = result.scalar_one_or_none() == 'buy'
                 if active_buy_flag:
                     logger.info(f"Активная покупка для {signal['symbol']} уже существует. Пропуск нового сигнала на покупку.")
                 else:
                     await connection.execute(text(insert_action_query), action_signal)
                     await connection.execute(text(insert_trade_query), signal)
             elif signal.get("price_sell") is not None:
-                await connection.execute(text(insert_action_query), action_signal)
-                await connection.execute(text(update_trade_query), signal)
+                if active_buy_flag:
+                    await connection.execute(text(insert_action_query), action_signal)
+                    await connection.execute(text(update_trade_query), signal)
+                else:
+                    logger.info(f"Активной покупки для {signal['symbol']} не существует. Пропуск нового сигнала на продажу.")
             await connection.commit()
             logger.info(f"Сигнал сохранен: {signal}")
         except SQLAlchemyError as e:
@@ -142,6 +145,29 @@ async def parse_recent_signals(client: TelegramClient):
     logger.info("Завершен парсинг старых сообщений.")
 
 
+async def calculate_monthly_profit():
+    """Вычисление процентов прибыли по месяцам."""
+    async with async_engine.connect() as connection:
+        try:
+            result = await connection.execute(text(calc_profit_query))
+            monthly_profits = []
+            for row in result:
+                monthly_profits.append({
+                    "month": row.month,
+                    "sum_auto_profit_percentage": row.sum_auto_profit_percentage,
+                    "sum_manual_profit_percentage": row.sum_manual_profit_percentage
+                })
+            logger.info("| Month                | Sum Auto Profit (%)   | Sum Manual Profit (%)     |")
+            logger.info("|----------------------|-----------------------|---------------------------|")
+            for month_data in monthly_profits:
+                logger.info("| %-20s | %-21.2f | %-25.2f |" % (
+                    str(month_data["month"])[0:7],  # Отображаем только год и месяц
+                    month_data["sum_auto_profit_percentage"],
+                    month_data["sum_manual_profit_percentage"]
+                ))
+        except SQLAlchemyError as e:
+            logger.error(f"Ошибка вычисления процентов прибыли по месяцам: {e}")
+
 
 async def main():
     """Основная функция для запуска скрипта."""
@@ -152,6 +178,8 @@ async def main():
     finally:
         await client.disconnect()
         logger.info("Клиент Telegram отключен.")
+
+    await calculate_monthly_profit()
 
 
 if __name__ == "__main__":
