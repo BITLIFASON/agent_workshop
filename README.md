@@ -59,13 +59,13 @@ https://app.holst.so/share/b/642a2d06-d6e5-4a48-be29-e0b764b01f3b - верхне
 
 Синхронный бэк-тест:
 ```bash
-docker compose -f sync-backtest-docker-compose.yml build
-docker compose -f sync-backtest-docker-compose.yml up
+docker compose -f backtest/sync-backtest-docker-compose.yml build
+docker compose -f backtest/sync-backtest-docker-compose.yml up
 ```
 
 Асинхронный бэк-тест:
 ```bash
-docker compose -f async-backtest-docker-compose.yml build
-docker compose -f async-backtest-docker-compose.yml up
+docker compose -f backtest/async-backtest-docker-compose.yml build
+docker compose -f backtest/async-backtest-docker-compose.yml up
 ```
 
