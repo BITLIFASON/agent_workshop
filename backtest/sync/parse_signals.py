@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Union
 from telethon.sync import TelegramClient
@@ -21,12 +22,21 @@ POSTGRES_DB = os.getenv('POSTGRES_DB')
 POSTGRES_USER = os.getenv('POSTGRES_USER')
 POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
 DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres/{POSTGRES_DB}"
-
-# Флаг удаления таблицы
 DROP_TABLE = os.getenv('DROP_TABLE', 'false').lower() == 'true'
+MAX_RETRIES_DB = os.getenv('MAX_RETRIES_DB')
 
 # Создаем синхронный движок для работы с базой данных
 engine = create_engine(DATABASE_URL, echo=False)
+
+
+def check_database_connection():
+    try:
+        with engine.connect() as connection:
+            return True
+    except:
+        time.sleep(3)
+        return False
+
 
 def init_db():
     """Инициализация схемы базы данных."""
@@ -131,6 +141,11 @@ def parse_recent_signals(client: TelegramClient):
                 }
                 save_signal(process_signal)
 
+    with engine.connect() as connection:
+        connection.execute(text(delete_trash_actions))
+        connection.execute(text(delete_trash_trades))
+        connection.commit()
+
     logger.info("Завершен парсинг старых сообщений.")
 
 
@@ -146,20 +161,35 @@ def calculate_monthly_profit():
                     "sum_auto_profit_percentage": row.sum_auto_profit_percentage,
                     "sum_manual_profit_percentage": row.sum_manual_profit_percentage
                 })
-                logger.info("| Month                | Sum Auto Profit (%)   | Sum Manual Profit (%)     |")
-                logger.info("|----------------------|-----------------------|---------------------------|")
-                for month_data in monthly_profits:
-                    logger.info("| %-20s | %-21.2f | %-25.2f |" % (
-                        str(month_data["month"])[0:7],  # Отображаем только год и месяц
-                        month_data["sum_auto_profit_percentage"],
-                        month_data["sum_manual_profit_percentage"]
-                    ))
+            logger.info("| Month                | Sum Auto Profit (%)   | Sum Manual Profit (%)     |")
+            logger.info("|----------------------|-----------------------|---------------------------|")
+            for month_data in monthly_profits:
+                logger.info("| %-20s | %-21.2f | %-25.2f |" % (
+                    str(month_data["month"])[0:7],  # Отображаем только год и месяц
+                    month_data["sum_auto_profit_percentage"],
+                    month_data["sum_manual_profit_percentage"]
+                ))
         except SQLAlchemyError as e:
             logger.error(f"Ошибка вычисления процентов прибыли по месяцам: {e}")
 
 
 def main():
     """Основная функция для запуска скрипта."""
+
+    max_retires_db = 0
+
+    while True:
+        db_health_flag = check_database_connection()
+        if db_health_flag:
+            logger.error(f"Подключение к базе данных PostgreSQL произошло успешно.")
+            break
+        else:
+            logger.error(f"Не удалось подключиться к базе данных PostgreSQL. Попытка {max_retires_db + 1}")
+            if max_retires_db == MAX_RETRIES_DB:
+                return
+            max_retires_db += 1
+
+
     init_db()
     client = TelegramClient("backtesting_session", API_ID, API_HASH)
     client.start()

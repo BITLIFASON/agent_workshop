@@ -1,14 +1,14 @@
 version: "3.8"
 
 services:
-  parsing-service:
+  backtest-service:
     build:
-      context: ./backtest-parsing-service
-      dockerfile: Dockerfile_async
+      context: ./sync
     volumes:
-      - ./backtest-parsing-service:/app
+      - ./sync:/app
+      - ./backtesting_session.session:/app/backtesting_session.session
     env_file:
-      - ./backtest.env
+      - ./backtest_service.env
     depends_on:
       - postgres
 
@@ -16,10 +16,8 @@ services:
     image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    env_file:
+      - ./backtest_db.env
     ports:
       - "5432:5432"
 

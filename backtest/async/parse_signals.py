@@ -23,12 +23,21 @@ POSTGRES_DB = os.getenv('POSTGRES_DB')
 POSTGRES_USER = os.getenv('POSTGRES_USER')
 POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
 DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres/{POSTGRES_DB}"
-
-# Флаг удаления таблицы
 DROP_TABLE = os.getenv('DROP_TABLE', 'false').lower() == 'true'
+MAX_RETRIES_DB = os.getenv('MAX_RETRIES_DB')
 
 # Создаем асинхронный движок для работы с базой данных
 async_engine = create_async_engine(DATABASE_URL, echo=False)
+
+
+async def check_database_connection():
+    try:
+        async with async_engine.connect() as connection:
+            return True
+    except:
+        await asyncio.sleep(3)
+        return False
+
 
 async def init_db():
     """Инициализация схемы базы данных."""
@@ -142,6 +151,11 @@ async def parse_recent_signals(client: TelegramClient):
                 }
                 await save_signal(process_signal)
 
+    async with async_engine.connect() as connection:
+        await connection.execute(text(delete_trash_actions))
+        await connection.execute(text(delete_trash_trades))
+        await connection.commit()
+
     logger.info("Завершен парсинг старых сообщений.")
 
 
@@ -171,6 +185,20 @@ async def calculate_monthly_profit():
 
 async def main():
     """Основная функция для запуска скрипта."""
+
+    max_retires_db = 0
+
+    while True:
+        db_health_flag = await check_database_connection()
+        if db_health_flag:
+            logger.error(f"Подключение к базе данных PostgreSQL произошло успешно.")
+            break
+        else:
+            logger.error(f"Не удалось подключиться к базе данных PostgreSQL. Попытка {max_retires_db + 1}")
+            if max_retires_db == MAX_RETRIES_DB:
+                return
+            max_retires_db += 1
+
     await init_db()
     client = await init_client()
     try:
@@ -180,6 +208,7 @@ async def main():
         logger.info("Клиент Telegram отключен.")
 
     await calculate_monthly_profit()
+    return
 
 
 if __name__ == "__main__":

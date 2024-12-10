@@ -41,9 +41,22 @@ update_trade_query = """
         manual_profit_percentage = (:price_sell / price_buy - 1) * 100
     WHERE symbol = :symbol AND price_sell IS NULL
 """
+delete_trash_trades = """DELETE FROM trades WHERE price_sell IS NULL"""
 insert_action_query = """
     INSERT INTO actions (symbol, action, price, timestamp)
     VALUES (:symbol, :action, :price, :timestamp)
+"""
+delete_trash_actions = """
+    DELETE FROM actions WHERE symbol IN (
+    SELECT group_symbol
+    FROM (
+        SELECT symbol AS group_symbol, MAX(timestamp) AS latest_timestamp
+        FROM actions
+        GROUP BY symbol
+    ) AS latest_actions
+    JOIN actions ON latest_actions.group_symbol = actions.symbol AND latest_actions.latest_timestamp = actions.timestamp
+    WHERE actions.action = 'buy'
+    )
 """
 
 calc_profit_query = """
@@ -54,5 +67,5 @@ calc_profit_query = """
     FROM trades
     WHERE auto_profit_percentage < 100 AND price_sell IS NOT NULL
     GROUP BY month
-    ORDER BY month;
+    ORDER BY month
 """
