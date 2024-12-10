@@ -57,6 +57,12 @@ https://app.holst.so/share/b/642a2d06-d6e5-4a48-be29-e0b764b01f3b - верхне
 
 ## Инструкция по запуску
 
+Получение файла сессии Telegram:
+```bash
+python get_telegram_session.py
+cp backtesting_session.session backtest/backtesting_session.session
+```
+
 Синхронный бэк-тест:
 ```bash
 docker compose -f backtest/sync-backtest-docker-compose.yml build
