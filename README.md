@@ -54,24 +54,3 @@ https://app.holst.so/share/b/642a2d06-d6e5-4a48-be29-e0b764b01f3b - верхне
 ### Альтернативы
 
 - Ручная логика управления балансом - запоминать начальный баланс в константу, ставить по 10% от константы на каждый ордер, при прибыли или убытке вычитать сумму из баланса
-
-## Инструкция по запуску
-
-Получение файла сессии Telegram:
-```bash
-python get_telegram_session.py
-cp backtesting_session.session backtest/backtesting_session.session
-```
-
-Синхронный бэк-тест:
-```bash
-docker compose -f backtest/sync-backtest-docker-compose.yml build
-docker compose -f backtest/sync-backtest-docker-compose.yml up
-```
-
-Асинхронный бэк-тест:
-```bash
-docker compose -f backtest/async-backtest-docker-compose.yml build
-docker compose -f backtest/async-backtest-docker-compose.yml up
-```
-

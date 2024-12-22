@@ -1,4 +1,0 @@
-telethon==1.38.1
-loguru==0.7.2
-sqlalchemy==2.0.36
-asyncpg==0.30.0
