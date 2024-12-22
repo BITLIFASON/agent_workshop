@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Union
@@ -9,7 +10,15 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
-from queries import *
+from queries import (create_trades_table_query,
+                     create_actions_table_query,
+                     active_buy_query,
+                     insert_action_query,
+                     insert_trade_query,
+                     update_trade_query,
+                     delete_trash_actions,
+                     delete_trash_trades,
+                     calc_profit_query)
 
 # Загрузка переменных окружения
 API_ID = int(os.getenv('API_ID', 0))
@@ -181,7 +190,7 @@ def main():
     while True:
         db_health_flag = check_database_connection()
         if db_health_flag:
-            logger.error(f"Подключение к базе данных PostgreSQL произошло успешно.")
+            logger.info(f"Подключение к PostgreSQL произошло успешно.")
             break
         else:
             logger.error(f"Не удалось подключиться к базе данных PostgreSQL. Попытка {max_retires_db + 1}")
@@ -189,19 +198,29 @@ def main():
                 return
             max_retires_db += 1
 
+    try:
+        init_db()
+    except Exception as e:
+        logger.error(f"Не удалось инициализировать базу данных. Ошибка: {e}")
 
-    init_db()
-    client = TelegramClient("backtesting_session", API_ID, API_HASH)
-    client.start()
-    logger.info("Telegram клиент успешно инициализирован.")
+    try:
+        client = TelegramClient("backtesting_session", API_ID, API_HASH)
+        client.start()
+        logger.info("Telegram клиент успешно инициализирован.")
+    except Exception as e:
+        logger.error(f"Не удалось инициализировать клиента Telegram. Ошибка: {e}")
+        sys.exit(1)
 
     try:
         parse_recent_signals(client)
     finally:
         client.disconnect()
         logger.info("Клиент Telegram отключен.")
+        sys.exit(1)
 
     calculate_monthly_profit()
+    sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

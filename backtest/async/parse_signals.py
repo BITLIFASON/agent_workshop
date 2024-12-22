@@ -1,8 +1,9 @@
 import os
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Union
-from telethon import TelegramClient, events
+from telethon import TelegramClient
 from telethon.tl.types import Message
 import asyncio
 from sqlalchemy.sql import text
@@ -10,7 +11,15 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
-from queries import *
+from queries import (create_trades_table_query,
+                     create_actions_table_query,
+                     active_buy_query,
+                     insert_action_query,
+                     insert_trade_query,
+                     update_trade_query,
+                     delete_trash_actions,
+                     delete_trash_trades,
+                     calc_profit_query)
 
 # Загрузка переменных окружения
 API_ID = int(os.getenv('API_ID', 0))
@@ -32,7 +41,7 @@ async_engine = create_async_engine(DATABASE_URL, echo=False)
 
 async def check_database_connection():
     try:
-        async with async_engine.connect() as connection:
+        async with async_engine.connect():
             return True
     except:
         await asyncio.sleep(3)
@@ -59,7 +68,7 @@ async def init_client() -> TelegramClient:
     """Инициализация клиента Telegram."""
     client = TelegramClient("backtesting_session",
                             api_id=API_ID,
-                            api_hash=API_HASH,)
+                            api_hash=API_HASH)
     await client.start()
     logger.info("Telegram клиент успешно инициализирован.")
     return client
@@ -186,29 +195,39 @@ async def calculate_monthly_profit():
 async def main():
     """Основная функция для запуска скрипта."""
 
-    max_retires_db = 0
+    max_retries_db = 0
 
     while True:
         db_health_flag = await check_database_connection()
         if db_health_flag:
-            logger.error(f"Подключение к базе данных PostgreSQL произошло успешно.")
+            logger.info(f"Подключение к PostgreSQL произошло успешно.")
             break
         else:
-            logger.error(f"Не удалось подключиться к базе данных PostgreSQL. Попытка {max_retires_db + 1}")
-            if max_retires_db == MAX_RETRIES_DB:
-                return
-            max_retires_db += 1
+            logger.error(f"Не удалось подключиться к базе данных PostgreSQL. Попытка {max_retries_db + 1}")
+            if max_retries_db == MAX_RETRIES_DB:
+                sys.exit(1)
+            max_retries_db += 1
 
-    await init_db()
-    client = await init_client()
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Не удалось инициализировать базу данных. Ошибка: {e}")
+
+    try:
+        client = await init_client()
+    except Exception as e:
+        logger.error(f"Не удалось инициализировать клиента Telegram. Ошибка: {e}")
+        sys.exit(1)
+
     try:
         await parse_recent_signals(client)
     finally:
         await client.disconnect()
         logger.info("Клиент Telegram отключен.")
+        sys.exit(1)
 
     await calculate_monthly_profit()
-    return
+    sys.exit(0)
 
 
 if __name__ == "__main__":

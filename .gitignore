@@ -1,6 +1,7 @@
 # Основные файлы с секретными данными
 *.env
 *.session
+*.session-journal
 instructions.txt
 
 # Виртуальное окружение Python
@@ -12,4 +13,3 @@ __pycache__/
 *.log
 *.tmp
 *.ipynb
-
