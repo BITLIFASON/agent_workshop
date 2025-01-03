@@ -65,7 +65,13 @@ calc_profit_query = """
         SUM(auto_profit_percentage) AS sum_auto_profit_percentage,
         SUM(manual_profit_percentage) AS sum_manual_profit_percentage
     FROM trades
-    WHERE auto_profit_percentage < 100 AND price_sell IS NOT NULL
+    WHERE auto_profit_percentage < 100
+      AND price_sell IS NOT NULL
+      AND (
+          DATE_PART('year', buy_timestamp) < DATE_PART('year', CURRENT_DATE)
+          OR (DATE_PART('year', buy_timestamp) = DATE_PART('year', CURRENT_DATE) 
+            AND DATE_PART('month', buy_timestamp) < DATE_PART('month', CURRENT_DATE))
+)
     GROUP BY month
     ORDER BY month
 """

@@ -1,7 +1,7 @@
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Union
 from telethon import TelegramClient
 from telethon.tl.types import Message
@@ -137,10 +137,8 @@ async def parse_recent_signals(client: TelegramClient):
     """Парсинг сигналов из Telegram за последние N дней."""
     logger.info(f"Начинается парсинг сообщений за последние {COUNT_DAYS} дней")
 
-    # Определяем дату начала
-    timezone_offset = 3.0
-    tzinfo = timezone(timedelta(hours=timezone_offset))
-    from_date = datetime.now(tzinfo) - timedelta(days=COUNT_DAYS)
+    # Определяем дату начала парсинга
+    from_date = datetime.today().replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=COUNT_DAYS)
     logger.info(f"Парсинг сообщений начиная с: {from_date}")
 
     # Получаем сущность канала
@@ -221,13 +219,11 @@ async def main():
 
     try:
         await parse_recent_signals(client)
+        await calculate_monthly_profit()
     finally:
         await client.disconnect()
         logger.info("Клиент Telegram отключен.")
-        sys.exit(1)
-
-    await calculate_monthly_profit()
-    sys.exit(0)
+        sys.exit(0)
 
 
 if __name__ == "__main__":
