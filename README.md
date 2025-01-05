@@ -1,26 +1,26 @@
-# Ветка backtest воркшопа по разработке автономного агента на основе LLM
+# A branch of the backtest workshop on the development of an autonomous agent based on LLM
 
-## Инструкция по запуску
+## Launch Instructions
 
-Получение файла сессии Telegram:
+Getting the Telegram session file:
 ```bash
 python get_telegram_session.py
 cp backtesting_session.session backtest/backtesting_session.session
 ```
 
-Синхронный бэк-тест:
+Synchronous back-test:
 ```bash
 docker compose -f backtest/sync-backtest-docker-compose.yml build
 docker compose -f backtest/sync-backtest-docker-compose.yml up
 ```
 
-Асинхронный бэк-тест:
+Asynchronous back-test:
 ```bash
 docker compose -f backtest/async-backtest-docker-compose.yml build
 docker compose -f backtest/async-backtest-docker-compose.yml up
 ```
 
-## Результаты тестирования
+## Test results
 
 | Month   | Sum Auto Profit (%)   | Sum Manual Profit (%)     |
 |---------|-----------------------|---------------------------|
