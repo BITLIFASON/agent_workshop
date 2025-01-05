@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from telethon import TelegramClient
+
+load_dotenv('backtest/backtest_service.env')
 
 API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '')
