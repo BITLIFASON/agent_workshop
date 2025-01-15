@@ -6,9 +6,9 @@ instructions.txt
 
 # Виртуальное окружение Python
 .ipynb_checkpoints/
-.idea
 venv/
 __pycache__/
+.idea
 
 # Конфигурационные файлы для библиотек и инструментов
 *.log

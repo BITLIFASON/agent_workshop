@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  postgres:
+    container_name: postgres_db1
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./envs/db.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "trading-system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    container_name: rabbitmq1
+    image: rabbitmq:4.0.5-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    env_file:
+      - ./envs/queue.env
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  parser_service:
+    container_name: parser1
+    build: ./parser-service
+    volumes:
+      - ./parser-service:/app
+    env_file:
+      - ./envs/parsing.env
+      - ./envs/queue.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  trading_service:
+    container_name: trading1
+    build: ./trading-service
+    volumes:
+      - ./trading-service:/app
+    env_file:
+      - ./envs/trading.env
+      - ./envs/market.env
+      - ./envs/queue.env
+      - ./envs/db.env
+      - envs/management.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  management_service:
+    container_name: management1
+    build: ./management-service
+    volumes:
+      - ./management-service:/app
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./envs/management.env
+      - ./envs/market.env
+      - ./envs/db.env
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: trading_network
