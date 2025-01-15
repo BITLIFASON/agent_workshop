@@ -6,6 +6,7 @@ instructions.txt
 
 # Виртуальное окружение Python
 .ipynb_checkpoints/
+.idea
 venv/
 __pycache__/
 
