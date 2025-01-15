@@ -1,0 +1,5 @@
+fastapi==0.115.6
+uvicorn==0.34.0
+loguru==0.7.2
+asyncpg==0.29.0
+pybit==5.8.0
