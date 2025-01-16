@@ -1,6 +1,23 @@
 version: "3.8"
 
 services:
+  trading_system:
+    container_name: trading1
+    build: ./agents
+    volumes:
+      - ./logs:/app/logs
+    env_file:
+      - ./envs/trading.env
+      - ./envs/market.env
+      - ./envs/queue.env
+      - ./envs/db.env
+      - envs/management.env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   postgres:
     container_name: postgres_db1
     image: postgres:15
@@ -29,37 +46,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
-  parser_service:
-    container_name: parser1
-    build: ./parser-service
-    volumes:
-      - ./parser-service:/app
-    env_file:
-      - ./envs/parsing.env
-      - ./envs/queue.env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-
-  trading_service:
-    container_name: trading1
-    build: ./trading-service
-    volumes:
-      - ./trading-service:/app
-    env_file:
-      - ./envs/trading.env
-      - ./envs/market.env
-      - ./envs/queue.env
-      - ./envs/db.env
-      - envs/management.env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
 
   management_service:
     container_name: management1

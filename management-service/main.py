@@ -21,6 +21,7 @@ async def startup():
         Exception: If an error occurs during startup.
     """
     try:
+        # Initialize Bybit client
         app.state.bybit_client = HTTP(
             testnet=False,
             api_key=os.getenv('BYBIT_API_KEY'),
@@ -28,6 +29,16 @@ async def startup():
             demo=os.getenv('BYBIT_DEMO_MODE', 'True') == 'True'
         )
         logger.info("Bybit client successfully initialized")
+
+        # Initialize system state
+        app.state.trading_state = {
+            "price_limit": 3.,
+            "fake_balance": 0.,
+            "num_available_lots": 0,
+            "enable_trading_system": 'disable',
+        }
+        logger.info("System state initialized")
+
     except Exception as e:
         logger.error(f"Failed to initialize Bybit client: {e}")
         raise
@@ -44,4 +55,4 @@ async def shutdown():
 setup_routes(app)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("MANAGEMENT_API_PORT", 8000)))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("MANAGEMENT_API_PORT", 8080)))
