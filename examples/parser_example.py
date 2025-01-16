@@ -1,23 +1,25 @@
 import os
 import asyncio
-from dotenv import load_dotenv
 from loguru import logger
-from agents.parser_agent import ParserAgent
+from ..agents.parser_agent import ParserAgent
+from ..agents.config import load_config
+
 
 async def signal_callback(signal):
     """Callback function for received signals"""
     logger.info(f"Received signal: {signal}")
 
 async def main():
-    # Load environment variables
-    load_dotenv()
+
+    # Load configuration
+    config = load_config()
 
     # Initialize parser agent
     parser = ParserAgent(
-        name="trading_parser",
-        api_id=int(os.getenv("API_ID")),
-        api_hash=os.getenv("API_HASH"),
-        channel_url=os.getenv("CHANNEL_URL"),
+        name="signal_parser",
+        api_id=config['telegram']['api_id'],
+        api_hash=config['telegram']['api_hash'],
+        channel_url=config['telegram']['channel_url'],
         message_callback=signal_callback
     )
 

@@ -1,38 +1,23 @@
 import os
 import asyncio
-from dotenv import load_dotenv
 from loguru import logger
-from agents.balance_control_agent import BalanceControlAgent
+from ..agents.balance_control_agent import BalanceControlAgent
+from ..agents.config import load_config
+
 
 async def trading_callback(trade_signal):
     """Callback function for trade execution"""
     logger.info(f"Executing trade: {trade_signal}")
 
 async def main():
-    # Load environment variables
-    load_dotenv()
 
-    # Database configuration
-    db_config = {
-        "user": os.getenv("POSTGRES_USER"),
-        "password": os.getenv("POSTGRES_PASSWORD"),
-        "database": os.getenv("POSTGRES_DB"),
-        "host": os.getenv("POSTGRES_HOST"),
-        "port": os.getenv("POSTGRES_PORT")
-    }
-
-    # Management API configuration
-    management_api_config = {
-        "host": os.getenv("MANAGEMENT_API_HOST"),
-        "port": os.getenv("MANAGEMENT_API_PORT"),
-        "token": os.getenv("MANAGEMENT_API_TOKEN")
-    }
+    # Load configuration
+    config = load_config()
 
     # Initialize balance control agent
     balance_control = BalanceControlAgent(
         name="balance_controller",
-        db_config=db_config,
-        management_api_config=management_api_config,
+        config=config,
         trading_callback=trading_callback
     )
 
@@ -43,7 +28,7 @@ async def main():
             test_signal = {
                 "symbol": "BTCUSDT",
                 "action": "buy",
-                "price": 50000.0
+                "price": 100.0
             }
 
             await balance_control.process_signal(test_signal)

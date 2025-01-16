@@ -1,16 +1,19 @@
 import os
 import asyncio
-from dotenv import load_dotenv
+
 from loguru import logger
-from agents.trading_agent import TradingAgent
+from ..agents.trading_agent import TradingAgent
+from ..agents.config import load_config
+
 
 async def execution_callback(result):
     """Callback function for trade execution results"""
     logger.info(f"Trade execution result: {result}")
 
 async def main():
-    # Load environment variables
-    load_dotenv()
+
+    # Load configuration
+    config = load_config()
 
     # Bybit configuration
     bybit_config = {
@@ -22,7 +25,7 @@ async def main():
     # Initialize trading agent
     trading_agent = TradingAgent(
         name="bybit_trader",
-        bybit_config=bybit_config,
+        bybit_config=config['bybit'],
         execution_callback=execution_callback
     )
 
@@ -34,7 +37,7 @@ async def main():
                 "symbol": "BTCUSDT",
                 "action": "buy",
                 "qty": 0.001,
-                "price": 50000.0  # For reference only, using market orders
+                "price": 100.0
             }
 
             await trading_agent.execute_trade(test_trade)

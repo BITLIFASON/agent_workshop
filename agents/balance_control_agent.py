@@ -90,7 +90,13 @@ class BalanceControlAgent(BaseAgent):
             )
 
             # Process trade
-            await self._execute_trade(signal, qty)
+            trade_signal = {
+                "symbol": signal["symbol"],
+                "action": "buy",
+                "qty": qty
+            }
+
+            await self.trading_callback(trade_signal)
 
         except Exception as e:
             self.logger.error(f"Error processing buy signal: {e}")
@@ -113,7 +119,6 @@ class BalanceControlAgent(BaseAgent):
             trade_signal = {
                 "symbol": signal["symbol"],
                 "action": "sell",
-                "price": signal["price"],
                 "qty": lot["qty"]
             }
 

@@ -11,8 +11,6 @@ async def main():
     setup_logging()
 
     try:
-        # Load environment variables
-        load_dotenv()
 
         # Create trading system
         system = TradingSystem(load_config())

@@ -1,6 +1,7 @@
 from typing import Dict, Any
 import asyncio
 from .base_agent import BaseAgent
+from .tools.base_tools import ToolResult
 from .tools.trading_tools import BybitTradingTool, OrderValidatorTool
 
 class TradingAgent(BaseAgent):
