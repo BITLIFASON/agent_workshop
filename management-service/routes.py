@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from loguru import logger
-from utils import get_real_balance, fetch_active_lots, validate_token
+from utils import fetch_active_lots, validate_token
 
 router = APIRouter()
 
@@ -53,28 +53,6 @@ async def api_set_system_status(system_status, request: Request, api_key: str):
     except Exception as e:
         logger.error(f"Error setting system status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to set system status: {str(e)}")
-
-@router.get("/get_real_balance")
-async def api_get_real_balance(request: Request, api_key: str):
-    """
-    Get the real balance from Bybit.
-
-    Args:
-        bybit_client (HTTP): The Bybit client.
-        api_key (str): The API token for authorization.
-
-    Returns:
-        dict: Real balance data.
-
-    Raises:
-        HTTPException: If an error occurs during fetching.
-    """
-    try:
-        validate_token(api_key)
-        return await get_real_balance(request.app.state.bybit_client)
-    except Exception as e:
-        logger.error(f"Error fetching real balance: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch real balance: {str(e)}")
 
 @router.get("/get_fake_balance")
 async def api_get_fake_balance(request: Request, api_key: str):

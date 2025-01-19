@@ -1,7 +1,7 @@
 from typing import Dict, Any, Callable
 import asyncio
 from .base_agent import BaseAgent
-from .tools.balance_tools import DatabaseTool, ManagementServiceTool
+from .tools.balance_tools import DatabaseTool, ManagementServiceTool, BybitTradingTool
 
 class BalanceControlAgent(BaseAgent):
     def __init__(
@@ -15,9 +15,11 @@ class BalanceControlAgent(BaseAgent):
         # Initialize tools
         self.management_tool = ManagementServiceTool(config['management_api'])
         self.db_tool = DatabaseTool(config['database'])
+        self.trading_tool = BybitTradingTool(config['bybit'])
 
         self.add_tool(self.management_tool)
         self.add_tool(self.db_tool)
+        self.add_tool(self.trading_tool)
 
         self.trading_callback = trading_callback
 
@@ -42,7 +44,7 @@ class BalanceControlAgent(BaseAgent):
                 return
 
             # Validate signal
-            if not self._validate_signal(signal):
+            if not await self._validate_signal(signal):
                 return
 
             if signal["action"] == "buy":
@@ -73,20 +75,23 @@ class BalanceControlAgent(BaseAgent):
                 return
 
             # Check available lots
-            lots_result = await self.management_tool.execute("get_num_available_lots")
-            if not lots_result.success:
-                raise Exception(f"Failed to get available lots: {lots_result.error}")
+            num_available_lots_result = await self.management_tool.execute("get_num_available_lots")
+            if not num_available_lots_result.success:
+                raise Exception(f"Failed to get available lots: {num_available_lots_result.error}")
+            num_available_lots = num_available_lots_result.data
 
             # Get fake balance
-            balance_result = await self.management_tool.execute("get_fake_balance")
-            if not balance_result.success:
-                raise Exception(f"Failed to get balance: {balance_result.error}")
+            fake_balance_result = await self.management_tool.execute("get_fake_balance")
+            if not fake_balance_result.success:
+                raise Exception(f"Failed to get balance: {fake_balance_result.error}")
+            fake_balance = fake_balance_result.data
 
             # Calculate quantity
-            qty = self._calculate_quantity(
-                balance_result.data,
+            qty = await self._calculate_quantity(
+                signal["symbol"],
+                fake_balance,
                 signal["price"],
-                lots_result.data
+                num_available_lots
             )
 
             # Process trade
@@ -134,19 +139,49 @@ class BalanceControlAgent(BaseAgent):
                 signal["price"]
             )
 
+            # FIX add delta profit
+
         except Exception as e:
             self.logger.error(f"Error processing sell signal: {e}")
             raise
 
-    def _validate_signal(self, signal: Dict[str, Any]) -> bool:
+    async def _validate_signal(self, signal: Dict[str, Any]) -> bool:
         """Validate trading signal"""
         required_fields = ["symbol", "action", "price"]
         return all(field in signal for field in required_fields)
 
-    def _calculate_quantity(self, balance: float, price: float, num_lots: int) -> float:
+    async def _calculate_quantity(self, symbol:str, fake_balance: float, price: float, num_available_lots: int) -> float:
         """Calculate trading quantity based on available balance"""
-        lot_balance = balance / num_lots
-        return round(lot_balance / price, 8)
+
+        result_symbol_wallet_balance = await self.trading_tool.execute(operation="get_coin_balance", symbol=symbol)
+        if not result_symbol_wallet_balance.success:
+            raise Exception(f"Failed to get active lots: {result_symbol_wallet_balance.error}")
+        symbol_wallet_balance = result_symbol_wallet_balance.data
+
+        result_symbol_qty_info = await self.trading_tool.execute(operation="get_coin_info", symbol=symbol)
+        if not result_symbol_qty_info.success:
+            raise Exception(f"Failed to get active lots: {result_symbol_qty_info.error}")
+        symbol_qty_info = result_symbol_qty_info.data
+        max_qty = symbol_qty_info.get("max_qty")
+        min_qty = symbol_qty_info.get("min_qty")
+        step_qty = symbol_qty_info.get("step_qty")
+        min_order_usdt = symbol_qty_info.get("min_order_usdt")
+
+        if len(step_qty.split('.')) == 1:
+            precision_qty = 0
+        else:
+            precision_qty = len(step_qty.split('.')[1])
+
+        qty = fake_balance / num_available_lots / price
+        qty -= symbol_wallet_balance
+
+        qty = round(qty, precision_qty)
+        if qty * price < min_order_usdt and qty < min_qty:
+            qty = 0
+        elif qty > max_qty:
+            qty = max_qty
+
+        return qty
 
     async def cleanup(self):
         """Cleanup resources"""

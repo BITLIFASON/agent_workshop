@@ -98,14 +98,6 @@ class TradingAgent(BaseAgent):
 
         return ToolResult(success=False, error=f"Failed after {self.retry_attempts} attempts")
 
-    async def get_position(self, symbol: str) -> ToolResult:
-        """Get current position for a symbol"""
-        return await self.trading_tool.execute("get_position", symbol=symbol)
-
-    async def get_balance(self, coin: str = "USDT") -> ToolResult:
-        """Get wallet balance"""
-        return await self.trading_tool.execute("get_wallet_balance", coin=coin)
-
     async def run(self):
         """Main execution loop"""
         self.logger.info("Trading Agent running...")

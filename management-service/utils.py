@@ -48,24 +48,6 @@ async def get_pg_connection():
         logger.error(f"Failed to connect to PostgreSQL: {e}")
         raise
 
-async def get_real_balance(bybit_client):
-    """
-    Get the real balance from Bybit.
-
-    Args:
-        bybit_client (HTTP): The Bybit client.
-
-    Returns:
-        dict: Real balance data.
-
-    Raises:
-        Exception: If an error occurs during fetching.
-    """
-    real_balance = float(
-        bybit_client.get_wallet_balance(accountType="UNIFIED", coin="USDT")["result"]["list"][0]["coin"][0]["walletBalance"]
-    )
-    return {"total_real_balance": real_balance}
-
 async def fetch_active_lots():
     """
     Fetch active lots from the PostgreSQL database.

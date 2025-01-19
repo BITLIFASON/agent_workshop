@@ -28,18 +28,10 @@ class BybitTradingTool(BaseTool):
                 return ToolResult(success=True, data=result)
 
             elif operation == "get_wallet_balance":
-                result = self.client.get_wallet_balance(
-                    accountType="UNIFIED",
-                    coin=kwargs.get('coin', 'USDT')
-                )
-                return ToolResult(success=True, data=result)
-
-            elif operation == "get_position":
-                result = self.client.get_positions(
-                    category="linear",
-                    symbol=kwargs['symbol']
-                )
-                return ToolResult(success=True, data=result)
+                balance_info = self.client.get_wallet_balance(accountType="UNIFIED",
+                                                              coin="USDT")["result"]["list"][0]["coin"][0]["walletBalance"]
+                balance_info = float(balance_info) if balance_info != '' else 0
+                return ToolResult(success=True, data=balance_info)
 
             else:
                 return ToolResult(success=False, error="Unknown operation")
