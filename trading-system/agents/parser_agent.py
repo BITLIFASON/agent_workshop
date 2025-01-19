@@ -10,6 +10,7 @@ class ParserAgent(BaseAgent):
         name: str,
         api_id: int,
         api_hash: str,
+        api_session_token: str,
         channel_url: str,
         message_callback
     ):
@@ -18,7 +19,7 @@ class ParserAgent(BaseAgent):
         self.message_callback = message_callback
 
         # Initialize tools
-        self.telegram_tool = TelegramListenerTool(api_id, api_hash)
+        self.telegram_tool = TelegramListenerTool(api_id, api_hash, api_session_token)
         self.parser_tool = SignalParserTool()
 
         self.add_tool(self.telegram_tool)

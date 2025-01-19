@@ -7,7 +7,8 @@ def load_config() -> Dict[str, Any]:
         'telegram': {
             'api_id': int(os.getenv('API_ID', 0)),
             'api_hash': os.getenv('API_HASH', ''),
-            'channel_url': os.getenv('CHANNEL_URL', '')
+            'api_session_token': os.getenv('API_SESSION_TOKEN', ''),
+            'channel_url': os.getenv('CHANNEL_URL', ''),
         },
         'database': {
             'host': 'postgres_db1',
@@ -15,13 +16,6 @@ def load_config() -> Dict[str, Any]:
             'user': os.getenv('POSTGRES_USER', ''),
             'password': os.getenv('POSTGRES_PASSWORD', ''),
             'database': os.getenv('POSTGRES_DB', ''),
-        },
-        'queue': {
-            'host': 'rabbitmq1',  # Updated container name
-            'port': int(os.getenv('RABBITMQ_PORT', 5672)),
-            'user': os.getenv('RABBITMQ_DEFAULT_USER', ''),
-            'password': os.getenv('RABBITMQ_DEFAULT_PASS', ''),
-            'queue_name': os.getenv('QUEUE_NAME', '')
         },
         'management_api': {
             'host': 'management1',  # имя контейнера

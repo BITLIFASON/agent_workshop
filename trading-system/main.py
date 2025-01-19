@@ -1,6 +1,5 @@
 import asyncio
 import signal
-from dotenv import load_dotenv
 from loguru import logger
 from agents.trading_system import TradingSystem
 from agents.config import load_config

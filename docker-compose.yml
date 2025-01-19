@@ -1,22 +1,6 @@
 version: "3.8"
 
 services:
-  trading_system:
-    container_name: trading1
-    build: ./agents
-    volumes:
-      - ./logs:/app/logs
-    env_file:
-      - ./envs/trading.env
-      - ./envs/market.env
-      - ./envs/queue.env
-      - ./envs/db.env
-      - envs/management.env
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
 
   postgres:
     container_name: postgres_db1
@@ -33,19 +17,21 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq:
-    container_name: rabbitmq1
-    image: rabbitmq:4.0.5-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+  trading_system:
+    container_name: trading1
+    build: trading-system
+    volumes:
+      - ./logs:/app/logs
+      - ./trading-system:/app
     env_file:
-      - ./envs/queue.env
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      - ./envs/parsing.env
+      - ./envs/db.env
+      - ./envs/management.env
+      - ./envs/trading.env
+      - ./envs/market.env
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   management_service:
     container_name: management1

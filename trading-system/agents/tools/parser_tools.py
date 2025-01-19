@@ -1,23 +1,29 @@
 from typing import Optional
 from datetime import datetime
+import os
 import re
 from .base_tools import BaseTool, ToolResult
 from telethon import TelegramClient
+from telethon.sessions import StringSession
+
 
 class TelegramListenerTool(BaseTool):
-    def __init__(self, api_id: int, api_hash: str, session_name: str = "parser_session"):
+    def __init__(self, api_id: int, api_hash: str, api_session_token: str):
         super().__init__(
             name="telegram_listener",
             description="Tool for listening to Telegram channels"
         )
         self.api_id = api_id
         self.api_hash = api_hash
-        self.session_name = session_name
+        self.api_session_token = api_session_token
         self.client: Optional[TelegramClient] = None
 
     async def initialize(self) -> ToolResult:
         try:
-            self.client = TelegramClient(self.session_name, self.api_id, self.api_hash)
+            self.client = TelegramClient(StringSession(self.api_session_token),
+                                         self.api_id,
+                                         self.api_hash,
+                                         system_version='4.16.30-vxAUTO')
             await self.client.start()
             return ToolResult(success=True)
         except Exception as e:

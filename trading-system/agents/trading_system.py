@@ -56,26 +56,6 @@ class TradingSystem:
                 self.logger.warning(f"Waiting for PostgreSQL (attempt {attempt}/{self.max_connection_attempts}): {e}")
                 await asyncio.sleep(self.connection_retry_delay)
 
-        # Wait for RabbitMQ
-        attempt = 0
-        while attempt < self.max_connection_attempts:
-            try:
-                connection = await aio_pika.connect_robust(
-                    host=self.config['queue']['host'],
-                    port=self.config['queue']['port'],
-                    login=self.config['queue']['user'],
-                    password=self.config['queue']['password']
-                )
-                await connection.close()
-                self.logger.info("Successfully connected to RabbitMQ")
-                break
-            except Exception as e:
-                attempt += 1
-                if attempt >= self.max_connection_attempts:
-                    raise Exception(f"Failed to connect to RabbitMQ after {self.max_connection_attempts} attempts: {e}")
-                self.logger.warning(f"Waiting for RabbitMQ (attempt {attempt}/{self.max_connection_attempts}): {e}")
-                await asyncio.sleep(self.connection_retry_delay)
-
         # Wait for Management API
         attempt = 0
         while attempt < self.max_connection_attempts:
@@ -158,6 +138,7 @@ class TradingSystem:
                 name="signal_parser",
                 api_id=self.config['telegram']['api_id'],
                 api_hash=self.config['telegram']['api_hash'],
+                api_session_token=self.config['telegram']['api_session_token'],
                 channel_url=self.config['telegram']['channel_url'],
                 message_callback=self._handle_parsed_signal
             )
