@@ -92,10 +92,10 @@ class TradingSystem:
                 # Create active lots table
                 await conn.execute('''
                     CREATE TABLE IF NOT EXISTS active_lots (
-                        id SERIAL PRIMARY KEY,
-                        symbol VARCHAR(20) NOT NULL,
-                        qty DECIMAL NOT NULL,
-                        price DECIMAL NOT NULL,
+                        id         SERIAL PRIMARY KEY,
+                        symbol     VARCHAR(20)    NOT NULL,
+                        qty        NUMERIC(20, 8) NOT NULL,
+                        price      NUMERIC(20, 8) NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 ''')
@@ -103,11 +103,11 @@ class TradingSystem:
                 # Create history lots table
                 await conn.execute('''
                     CREATE TABLE IF NOT EXISTS history_lots (
-                        id SERIAL PRIMARY KEY,
-                        action VARCHAR(10) NOT NULL,
-                        symbol VARCHAR(20) NOT NULL,
-                        qty DECIMAL NOT NULL,
-                        price DECIMAL NOT NULL,
+                        id         SERIAL PRIMARY KEY,
+                        action     VARCHAR(10)    NOT NULL,
+                        symbol     VARCHAR(20)    NOT NULL,
+                        qty        NUMERIC(20, 8) NOT NULL,
+                        price      NUMERIC(20, 8) NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 ''')

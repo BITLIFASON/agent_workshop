@@ -17,39 +17,12 @@ class DatabaseTool(BaseTool):
     async def initialize(self) -> ToolResult:
         """Initialize database connection and create tables if they don't exist"""
         try:
-            # Create connection pool
             self.pool = await asyncpg.create_pool(**self.db_config)
-
-            # Initialize database tables
-            async with self.pool.acquire() as conn:
-                # Create active lots table
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS active_lots (
-                        id SERIAL PRIMARY KEY,
-                        symbol VARCHAR(20) NOT NULL,
-                        qty DECIMAL NOT NULL,
-                        price DECIMAL NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                ''')
-
-                # Create history lots table
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS history_lots (
-                        id SERIAL PRIMARY KEY,
-                        action VARCHAR(10) NOT NULL,
-                        symbol VARCHAR(20) NOT NULL,
-                        qty DECIMAL NOT NULL,
-                        price DECIMAL NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                ''')
-
-            logger.info("Database tables initialized successfully")
+            logger.info("Database connection initialized successfully")
             return ToolResult(success=True)
 
         except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
+            logger.error(f"Failed to initialize database connection: {e}")
             return ToolResult(success=False, error=str(e))
 
     async def execute(self, operation: str, *args) -> ToolResult:

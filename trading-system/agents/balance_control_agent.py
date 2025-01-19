@@ -103,6 +103,9 @@ class BalanceControlAgent(BaseAgent):
 
             await self.trading_callback(trade_signal)
 
+            await self.db_tool.execute("create_lot", signal["symbol"], qty, signal["price"])
+            await self.db_tool.execute("create_history_lot","buy", signal["symbol"], qty, signal["price"])
+
         except Exception as e:
             self.logger.error(f"Error processing buy signal: {e}")
             raise
@@ -126,18 +129,11 @@ class BalanceControlAgent(BaseAgent):
                 "action": "sell",
                 "qty": lot["qty"]
             }
-
             await self.trading_callback(trade_signal)
 
             # Record transaction
             await self.db_tool.execute("delete_lot", signal["symbol"])
-            await self.db_tool.execute(
-                "create_history_lot",
-                "sell",
-                signal["symbol"],
-                lot["qty"],
-                signal["price"]
-            )
+            await self.db_tool.execute("create_history_lot","sell",signal["symbol"],lot["qty"],signal["price"])
 
             # FIX add delta profit
 
