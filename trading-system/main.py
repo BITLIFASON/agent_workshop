@@ -2,7 +2,7 @@ import asyncio
 import signal
 from loguru import logger
 from agents.trading_system import TradingSystem
-from utils.config import load_config
+from agents.utils.config import load_config
 from agents.utils.logger import setup_logging
 
 async def main():
