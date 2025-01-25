@@ -17,11 +17,50 @@ class DatabaseTool(BaseTool):
         self.db_config = db_config
         self.pool: Optional[asyncpg.Pool] = None
 
+    async def _create_tables(self, conn) -> bool:
+        """Create necessary database tables if they don't exist"""
+        try:
+            # Create active_lots table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS active_lots (
+                    id SERIAL PRIMARY KEY,
+                    symbol VARCHAR(50) NOT NULL,
+                    qty NUMERIC(20, 8) NOT NULL,
+                    price NUMERIC(20, 8) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Create history_lots table
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS history_lots (
+                    id SERIAL PRIMARY KEY,
+                    action VARCHAR(50) NOT NULL,
+                    symbol VARCHAR(50) NOT NULL,
+                    qty NUMERIC(20, 8) NOT NULL,
+                    price NUMERIC(20, 8) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            logger.info("Database tables created successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+            return False
+
     async def initialize(self) -> ToolResult:
         """Initialize database connection and create tables if they don't exist"""
         try:
             self.pool = await asyncpg.create_pool(**self.db_config)
-            logger.info("Database connection initialized successfully")
+            
+            # Create tables
+            async with self.pool.acquire() as conn:
+                if not await self._create_tables(conn):
+                    return ToolResult(success=False, error="Failed to create tables")
+            
+            logger.info("Database connection and tables initialized successfully")
             return ToolResult(success=True)
 
         except Exception as e:
@@ -35,38 +74,47 @@ class DatabaseTool(BaseTool):
         try:
             async with self.pool.acquire() as conn:
                 if operation == "get_active_lots":
-                    result = await conn.fetch("SELECT * FROM active_lots")
+                    result = await conn.fetch("""
+                        SELECT * FROM active_lots 
+                        WHERE symbol = $1
+                    """, args[0] if args else None)
                     return ToolResult(success=True, data=result)
 
                 elif operation == "create_lot":
                     symbol, qty, price = args
-                    await conn.execute(
-                        "INSERT INTO active_lots (symbol, qty, price) VALUES ($1, $2, $3)",
-                        symbol, qty, price
-                    )
+                    await conn.execute("""
+                        INSERT INTO active_lots (symbol, qty, price) 
+                        VALUES ($1, $2, $3)
+                    """, symbol, qty, price)
                     return ToolResult(success=True)
 
                 elif operation == "delete_lot":
                     symbol = args[0]
-                    await conn.execute("DELETE FROM active_lots WHERE symbol = $1", symbol)
+                    await conn.execute("""
+                        DELETE FROM active_lots 
+                        WHERE symbol = $1
+                    """, symbol)
                     return ToolResult(success=True)
 
                 elif operation == "create_history_lot":
                     action, symbol, qty, price = args
-                    await conn.execute(
-                        "INSERT INTO history_lots (action, symbol, qty, price) VALUES ($1, $2, $3, $4)",
-                        action, symbol, qty, price
-                    )
+                    await conn.execute("""
+                        INSERT INTO history_lots (action, symbol, qty, price) 
+                        VALUES ($1, $2, $3, $4)
+                    """, action, symbol, qty, price)
                     return ToolResult(success=True)
 
-            return ToolResult(success=False, error="Unknown operation")
+                return ToolResult(success=False, error="Unknown operation")
+
         except Exception as e:
+            logger.error(f"Database error: {e}")
             return ToolResult(success=False, error=str(e))
 
     async def cleanup(self):
+        """Close database connection pool"""
         if self.pool:
             await self.pool.close()
-            logger.info("Database connection pool closed")
+            logger.info("Database connection closed")
 
 class ManagementServiceTool(BaseTool):
     def __init__(self, config: Dict[str, str]):

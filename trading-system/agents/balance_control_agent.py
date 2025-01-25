@@ -102,9 +102,12 @@ class BalanceControlAgent(BaseAgent):
         try:
             # Check system status and constraints
             system_task = Task(
-                description="""Check trading system status and constraints:
+                description=f"""Check trading system status and constraints:
+                Symbol: {signal['symbol']}
+                Price: {signal['price']}
+                
                 1. Is system enabled?
-                2. Get current price limit
+                2. Check if price exceeds current limit
                 3. Get fake balance
                 4. Get number of available lots""",
                 agent=self.system_monitor
@@ -130,7 +133,7 @@ class BalanceControlAgent(BaseAgent):
             analysis_task = Task(
                 description=f"""Analyze trade and calculate position size:
                 Symbol: {signal['symbol']}
-                Price: {signal['price']}
+                Entry Price: {signal['price']}
                 Fake Balance: {fake_balance}
                 Available Lots: {available_lots}
                 
@@ -216,7 +219,31 @@ class BalanceControlAgent(BaseAgent):
     async def _validate_signal(self, signal: Dict[str, Any]) -> bool:
         """Validate trading signal"""
         required_fields = ["symbol", "action", "price"]
-        return all(field in signal for field in required_fields)
+        if not all(field in signal for field in required_fields):
+            self.logger.warning(f"Missing required fields in signal: {signal}")
+            return False
+            
+        try:
+            # Validate symbol format
+            if not signal["symbol"].endswith('USDT'):
+                self.logger.warning(f"Invalid symbol format: {signal['symbol']}")
+                return False
+                
+            # Validate price
+            if not isinstance(signal["price"], (int, float)) or signal["price"] <= 0:
+                self.logger.warning(f"Invalid price: {signal['price']}")
+                return False
+                
+            # Validate action
+            if signal["action"] not in ["buy", "sell"]:
+                self.logger.warning(f"Invalid action: {signal['action']}")
+                return False
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error validating signal: {e}")
+            return False
 
     async def initialize(self):
         """Initialize the balance control agent"""

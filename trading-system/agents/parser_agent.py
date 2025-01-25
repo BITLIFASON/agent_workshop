@@ -73,34 +73,29 @@ class ParserAgent(BaseAgent):
                 self.logger.warning("Agent not active, skipping message processing")
                 return
 
-            # Create parsing task
-            parsing_task = Task(
-                description=f"Parse the following message into a trading signal: {event.message.message}",
-                agent=self.signal_parser
-            )
+            message_text = event.message.message.strip()
+            self.logger.info(f"Processing message: {message_text}")
 
-            # Create validation task
-            validation_task = Task(
-                description="Validate the parsed signal data and enhance it if needed",
-                agent=self.signal_validator
-            )
+            # Parse signal using parser tool
+            signal = await self.parser_tool._arun(message_text)
+            
+            if not signal:
+                self.logger.warning("Failed to parse message as trading signal")
+                return
 
-            # Execute tasks
-            self.crew.tasks = [parsing_task, validation_task]
-            result = await self.crew.kickoff()
+            # Update agent state
+            self.state.last_action = f"Parsed {signal.action} signal for {signal.symbol}"
 
-            if isinstance(result, SignalData):
-                # Update agent state
-                self.state.last_action = f"Parsed signal for {result.symbol}"
-
-                # Validate signal timing
-                if self._is_signal_valid(result):
-                    await self.message_callback(result.dict())
-                    self.logger.info(f"Signal processed: {result}")
-                else:
-                    self.logger.warning(f"Signal outdated: {result}")
+            # Validate signal timing
+            if self._is_signal_valid(signal):
+                # Convert to dict and add timestamp
+                signal_dict = signal.dict()
+                signal_dict["timestamp"] = signal.timestamp
+                
+                await self.message_callback(signal_dict)
+                self.logger.info(f"Signal processed: {signal_dict}")
             else:
-                self.logger.warning("Failed to parse signal from message")
+                self.logger.warning(f"Signal outdated: {signal}")
 
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
@@ -108,13 +103,27 @@ class ParserAgent(BaseAgent):
 
     def _is_signal_valid(self, signal: SignalData) -> bool:
         """Check if the signal is still valid based on timing"""
-        now = datetime.now()
-        signal_time = signal.timestamp
+        try:
+            now = datetime.now()
+            signal_time = signal.timestamp
 
-        if signal.action == 'buy':
-            return now - signal_time < timedelta(minutes=30)
-        else:
-            return now - signal_time < timedelta(hours=24)
+            # Buy signals valid for 30 minutes, sell signals for 24 hours
+            if signal.action == 'buy':
+                is_valid = now - signal_time < timedelta(minutes=30)
+            else:
+                is_valid = now - signal_time < timedelta(hours=24)
+
+            if not is_valid:
+                self.logger.warning(
+                    f"Signal expired: {signal.action} signal for {signal.symbol} "
+                    f"from {signal_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+
+            return is_valid
+
+        except Exception as e:
+            self.logger.error(f"Error validating signal timing: {e}")
+            return False
 
     async def run(self):
         """Main execution loop"""
