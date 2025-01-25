@@ -12,7 +12,8 @@ def load_config() -> Dict[str, Any]:
         "bybit": {
             "api_key": os.getenv("BYBIT_API_KEY"),
             "api_secret": os.getenv("BYBIT_API_SECRET"),
-            "demo_mode": os.getenv("BYBIT_DEMO_MODE", "True")
+            "demo_mode": os.getenv("BYBIT_DEMO_MODE", "True"),
+            "leverage": os.getenv("LEVERAGE", "1")
         },
         
         "telegram": {

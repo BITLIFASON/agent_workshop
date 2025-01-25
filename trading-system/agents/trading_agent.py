@@ -76,12 +76,32 @@ class TradingAgent(BaseAgent):
                 "qty": trade_signal["qty"]
             }
 
+            # Get current market price
+            price_check = await self.trading_tool.execute("get_market_price", symbol=trade_signal["symbol"])
+            if not price_check.success:
+                self.logger.error(f"Failed to get market price: {price_check.error}")
+                return
+
+            current_price = price_check.data
+            signal_price = trade_signal["price"]
+
+            # Check if price hasn't moved too much (1% tolerance)
+            price_diff_percent = abs(current_price - signal_price) / signal_price * 100
+            if price_diff_percent > 1:
+                self.logger.warning(
+                    f"Price moved too much. Signal: {signal_price}, Current: {current_price}, "
+                    f"Difference: {price_diff_percent:.2f}%"
+                )
+                return
+
             # Analyze market conditions and validate order
             analysis_task = Task(
                 description=f"""Analyze and validate trade order:
                 Symbol: {order_data['symbol']}
                 Action: {order_data['side']}
                 Quantity: {order_data['qty']}
+                Signal Price: {signal_price}
+                Current Price: {current_price}
                 
                 1. Validate order parameters using OrderValidatorTool
                 2. Check symbol trading status
@@ -107,48 +127,37 @@ class TradingAgent(BaseAgent):
                 await self.execution_callback({
                     "status": "success",
                     "order": order_data,
-                    "result": execution_result.get("data")
+                    "result": execution_result.get("data"),
+                    "price": current_price
                 })
 
         except Exception as e:
             self.logger.error(f"Error executing trade: {e}")
             self.state.last_error = str(e)
 
-    async def _execute_order_with_retry(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_order_with_retry(self, order_data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
         """Execute order with retry mechanism"""
-        for attempt in range(self.retry_attempts):
+        retries = 0
+        while retries < max_retries:
             try:
-                execution_task = Task(
-                    description=f"""Execute trade order:
-                    Symbol: {order_data['symbol']}
-                    Action: {order_data['side']}
-                    Quantity: {order_data['qty']}
-                    Attempt: {attempt + 1}/{self.retry_attempts}
+                result = await self.trading_tool.execute("place_order", **order_data)
+                if result.success:
+                    return {"success": True, "data": result.data}
+                
+                retries += 1
+                if retries < max_retries:
+                    self.logger.warning(f"Retry {retries}/{max_retries}: {result.error}")
+                    await asyncio.sleep(self.retry_delay)
+                else:
+                    return {"success": False, "error": f"Max retries reached: {result.error}"}
                     
-                    1. Place order with specified parameters
-                    2. Verify order placement
-                    3. Monitor order status
-                    4. Handle any execution issues""",
-                    agent=self.order_executor
-                )
-                result = await self.crew.kickoff([execution_task])
-
-                if result.get("success"):
-                    return result
-
-                self.logger.warning(f"Attempt {attempt + 1} failed: {result.get('error')}")
-                if attempt < self.retry_attempts - 1:
-                    await asyncio.sleep(self.retry_delay)
-
             except Exception as e:
-                self.logger.error(f"Error in attempt {attempt + 1}: {e}")
-                if attempt < self.retry_attempts - 1:
+                retries += 1
+                if retries < max_retries:
+                    self.logger.warning(f"Retry {retries}/{max_retries} after error: {e}")
                     await asyncio.sleep(self.retry_delay)
-
-        return {
-            "success": False,
-            "error": f"Failed after {self.retry_attempts} attempts"
-        }
+                else:
+                    return {"success": False, "error": str(e)}
 
     async def initialize(self):
         """Initialize the trading agent"""

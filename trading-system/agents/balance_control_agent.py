@@ -129,6 +129,14 @@ class BalanceControlAgent(BaseAgent):
                 self.logger.warning("No available lots")
                 return
 
+            # Get symbol trading limits
+            symbol_info = await self.trading_tool.execute("get_coin_info", symbol=signal['symbol'])
+            if not symbol_info.success:
+                self.logger.error(f"Failed to get symbol info: {symbol_info.error}")
+                return
+
+            limits = symbol_info.data
+            
             # Calculate position size
             analysis_task = Task(
                 description=f"""Analyze trade and calculate position size:
@@ -136,10 +144,15 @@ class BalanceControlAgent(BaseAgent):
                 Entry Price: {signal['price']}
                 Fake Balance: {fake_balance}
                 Available Lots: {available_lots}
+                Min Order Size: {limits['min_order_usdt']} USDT
+                Min Quantity: {limits['min_qty']}
+                Max Quantity: {limits['max_qty']}
+                Step Size: {limits['step_qty']}
                 
-                1. Get symbol trading limits from Bybit
-                2. Calculate optimal quantity based on fake balance and lots
-                3. Validate against symbol limits""",
+                1. Calculate optimal quantity based on fake balance and lots
+                2. Ensure quantity meets min/max limits
+                3. Round quantity to step size
+                4. Verify total value >= min order size""",
                 agent=self.trade_analyzer
             )
             analysis_result = await self.crew.kickoff([analysis_task])
@@ -149,11 +162,31 @@ class BalanceControlAgent(BaseAgent):
                 self.logger.warning("Failed to calculate position size")
                 return
 
+            # Validate quantity
+            if qty < float(limits['min_qty']):
+                self.logger.warning(f"Quantity {qty} is below minimum {limits['min_qty']}")
+                return
+
+            if qty > float(limits['max_qty']):
+                self.logger.warning(f"Quantity {qty} exceeds maximum {limits['max_qty']}")
+                return
+
+            # Round to step size
+            step_size = float(limits['step_qty'])
+            qty = round(qty / step_size) * step_size
+
+            # Check minimum order value
+            order_value = qty * signal['price']
+            if order_value < float(limits['min_order_usdt']):
+                self.logger.warning(f"Order value {order_value} USDT is below minimum {limits['min_order_usdt']} USDT")
+                return
+
             # Execute trade
             trade_signal = {
                 "symbol": signal["symbol"],
                 "action": "buy",
-                "qty": qty
+                "qty": qty,
+                "price": signal["price"]
             }
             await self.trading_callback(trade_signal)
 
