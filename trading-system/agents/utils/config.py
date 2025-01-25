@@ -7,7 +7,11 @@ def load_config() -> Dict[str, Any]:
     load_dotenv()
 
     return {
-        "openai_api_key": os.getenv("OPENAI_API_KEY"),
+        "llm": {
+            "provider": os.getenv("LLM_PROVIDER"),
+            "model": os.getenv("LLM_MODEL"),
+            "api_key": os.getenv("LLM_API_KEY"),
+        },
         
         "bybit": {
             "api_key": os.getenv("BYBIT_API_KEY"),
@@ -36,4 +40,4 @@ def load_config() -> Dict[str, Any]:
             "user": os.getenv("POSTGRES_USER"),
             "password": os.getenv("POSTGRES_PASSWORD")
         }
-    }
+    } 

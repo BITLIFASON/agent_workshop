@@ -1,7 +1,6 @@
 import os
 from typing import Dict, Any
 import asyncio
-from dotenv import load_dotenv
 from loguru import logger
 from .parser_agent import ParserAgent
 from .balance_control_agent import BalanceControlAgent

@@ -1,9 +1,5 @@
-from typing import Dict, Any
 from datetime import datetime, timedelta
-from telethon import events
-from crewai import Agent, Task, Crew
-from langchain.tools import BaseTool
-from pydantic import BaseModel, Field
+from crewai import Agent, Crew
 from .base_agent import BaseAgent
 from .tools.parser_tools import SignalData, SignalParserTool, TelegramListenerTool
 import asyncio

@@ -29,6 +29,7 @@ services:
       - ./envs/management.env
       - ./envs/trading.env
       - ./envs/market.env
+      - ./envs/llm.env
     depends_on:
       postgres:
         condition: service_healthy

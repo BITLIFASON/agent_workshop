@@ -2,6 +2,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from loguru import logger
 from abc import ABC, abstractmethod
+from utils.llm_providers import LLMProvider, LLMFactory
 
 class AgentState(BaseModel):
     """Base state model for agents"""
@@ -13,11 +14,17 @@ class AgentState(BaseModel):
 class BaseAgent(ABC):
     """Base class for all agents in the system"""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, llm_config: Dict[str, Any]):
         self.name = name
         self.state = AgentState()
         self.tools = []
         self._setup_logger()
+        
+        # Initialize LLM provider
+        provider_type = LLMProvider(llm_config.get("provider", "openai"))
+        self.llm_provider = LLMFactory.create_provider(provider_type, llm_config)
+        if not self.llm_provider:
+            raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
     def _setup_logger(self):
         """Setup logger for the agent"""
@@ -29,6 +36,12 @@ class BaseAgent(ABC):
         )
         self.logger = logger.bind(agent=self.name)
 
+    async def get_llm_config(self) -> Dict[str, Any]:
+        """Get LLM configuration for CrewAI"""
+        if not self.llm_provider:
+            raise ValueError("LLM provider not initialized")
+        return await self.llm_provider.get_llm_config()
+
     @abstractmethod
     async def run(self, *args, **kwargs):
         """Main execution method for the agent"""
@@ -37,7 +50,11 @@ class BaseAgent(ABC):
     @abstractmethod
     async def initialize(self):
         """Initialize agent's resources"""
-        pass
+        # Initialize LLM provider first
+        if not await self.llm_provider.initialize():
+            self.logger.error("Failed to initialize LLM provider")
+            return False
+        return True
 
     async def cleanup(self):
         """Cleanup agent's resources"""
