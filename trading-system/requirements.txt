@@ -1,6 +1,26 @@
-crewai>=0.16.1
-telethon>=1.33.1
-pydantic>=2.5.3
-loguru>=0.7.2
+# Core dependencies
+aiohttp>=3.9.1
+asyncio>=3.4.3
 python-dotenv>=1.0.0
-langchain>=0.1.0 
+pydantic>=2.5.2
+
+# Database
+asyncpg>=0.29.0
+aio-pika>=9.3.1
+
+# Trading
+pybit>=5.5.0
+
+# Telegram
+Telethon>=1.33.1
+
+# LLM and Agents
+crewai>=0.16.1
+langchain>=0.1.0
+openai>=1.6.1
+
+# Logging and utils
+loguru>=0.7.2
+
+# Load environment variables
+python-dotenv>=1.0.0
