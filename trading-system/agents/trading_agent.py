@@ -9,10 +9,10 @@ class TradingAgent(BaseAgent):
         self,
         name: str,
         bybit_config: Dict[str, str],
-        openai_api_key: str,
+        llm_config: Dict[str, Any],
         execution_callback=None
     ):
-        super().__init__(name)
+        super().__init__(name, llm_config)
 
         # Initialize tools
         self.trading_tool = BybitTradingTool(bybit_config)
@@ -22,7 +22,6 @@ class TradingAgent(BaseAgent):
         self.add_tool(self.validator_tool)
 
         self.execution_callback = execution_callback
-        self.openai_api_key = openai_api_key
         self.retry_attempts = 3
         self.retry_delay = 1  # seconds
 
@@ -31,6 +30,8 @@ class TradingAgent(BaseAgent):
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
+        llm = self.llm_provider.get_crew_llm(temperature=0.7)
+
         self.market_analyst = Agent(
             role="Market Analyst",
             goal="Analyze market conditions and validate order parameters",
@@ -40,7 +41,7 @@ class TradingAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.validator_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.order_executor = Agent(
@@ -52,7 +53,7 @@ class TradingAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.trading_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.crew = Crew(
@@ -160,22 +161,16 @@ class TradingAgent(BaseAgent):
 
     async def initialize(self):
         """Initialize the trading agent"""
+        if not await super().initialize():
+            return False
+
         self.logger.info("Initializing Trading Agent...")
 
-        # Test connection by getting wallet balance
         try:
             # Verify exchange connection
-            test_task = Task(
-                description="""Verify exchange connection:
-                1. Check API connectivity
-                2. Verify trading permissions
-                3. Get wallet balance""",
-                agent=self.order_executor
-            )
-            result = await self.crew.kickoff([test_task])
-
-            if not result.get("success"):
-                self.logger.error(f"Failed to connect to exchange: {result.get('error')}")
+            balance = await self.trading_tool.execute("get_wallet_balance")
+            if not balance.success:
+                self.logger.error(f"Failed to connect to exchange: {balance.error}")
                 return False
 
             self.state.is_active = True

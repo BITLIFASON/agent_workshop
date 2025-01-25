@@ -14,9 +14,9 @@ class BalanceControlAgent(BaseAgent):
         name: str,
         config: Dict[str, Any],
         trading_callback: Callable,
-        openai_api_key: str
+        llm_config: Dict[str, Any]
     ):
-        super().__init__(name)
+        super().__init__(name, llm_config)
         
         # Initialize tools
         self.management_tool = ManagementServiceTool(config['management_api'])
@@ -28,13 +28,14 @@ class BalanceControlAgent(BaseAgent):
         self.add_tool(self.trading_tool)
 
         self.trading_callback = trading_callback
-        self.openai_api_key = openai_api_key
 
         # Initialize Crew AI components
         self._setup_crew()
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
+        llm = self.llm_provider.get_crew_llm(temperature=0.7)
+
         self.system_monitor = Agent(
             role="System Monitor",
             goal="Monitor system status and validate trading conditions",
@@ -44,7 +45,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.management_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.trade_analyzer = Agent(
@@ -56,7 +57,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.trading_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.db_manager = Agent(
@@ -67,7 +68,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.db_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.crew = Crew(
@@ -97,7 +98,7 @@ class BalanceControlAgent(BaseAgent):
             self.state.last_error = str(e)
 
     async def _process_buy_signal(self, signal: Dict[str, Any]):
-        """Process buy signal using Crew AI"""
+        """Process buy signal"""
         try:
             # Check system status and constraints
             system_task = Task(
@@ -207,7 +208,7 @@ class BalanceControlAgent(BaseAgent):
             raise
 
     async def _process_sell_signal(self, signal: Dict[str, Any]):
-        """Process sell signal using Crew AI"""
+        """Process sell signal"""
         try:
             # Check active lots
             db_task = Task(
@@ -227,7 +228,8 @@ class BalanceControlAgent(BaseAgent):
             trade_signal = {
                 "symbol": signal["symbol"],
                 "action": "sell",
-                "qty": lot["qty"]
+                "qty": lot["qty"],
+                "price": signal["price"]
             }
             await self.trading_callback(trade_signal)
 
@@ -279,6 +281,9 @@ class BalanceControlAgent(BaseAgent):
 
     async def initialize(self):
         """Initialize the balance control agent"""
+        if not await super().initialize():
+            return False
+
         try:
             self.logger.info("Initializing Balance Control Agent...")
             

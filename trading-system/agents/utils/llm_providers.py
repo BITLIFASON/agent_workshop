@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from loguru import logger
 import openai
-from langchain.chat_models import ChatOpenAI
 import anthropic
 import google.generativeai as genai
 from mistralai import Mistral, UserMessage, SystemMessage, AssistantMessage
 from enum import Enum
+from crewai import LLM
 
 
 class LLMProvider(Enum):
@@ -30,8 +30,8 @@ class BaseLLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        """Generate response from the model"""
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        """Get CrewAI LLM configuration"""
         pass
 
 
@@ -67,16 +67,13 @@ class OpenAIProvider(BaseLLMProvider):
             "model": self.model
         }
 
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            response = await openai.chat.completions.create(
-                model=self.model,
-                messages=messages
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"Error generating OpenAI response: {e}")
-            return ""
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        return LLM(
+            model=self.model,
+            temperature=temperature,
+            base_url="https://api.openai.com/v1",
+            api_key=self.api_key
+        )
 
 
 class AnthropicProvider(BaseLLMProvider):
@@ -95,12 +92,6 @@ class AnthropicProvider(BaseLLMProvider):
     async def initialize(self) -> bool:
         try:
             self.client = anthropic.Anthropic(api_key=self.api_key)
-            # Test API connection
-            await self.client.messages.create(
-                model=self.model,
-                max_tokens=5,
-                messages=[{"role": "user", "content": "test"}]
-            )
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Anthropic: {e}")
@@ -112,16 +103,13 @@ class AnthropicProvider(BaseLLMProvider):
             "model": self.model
         }
 
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            response = await self.client.messages.create(
-                model=self.model,
-                messages=messages
-            )
-            return response.content[0].text
-        except Exception as e:
-            logger.error(f"Error generating Anthropic response: {e}")
-            return ""
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        return LLM(
+            model=self.model,
+            temperature=temperature,
+            base_url="https://api.anthropic.com/v1",
+            api_key=self.api_key
+        )
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -141,9 +129,6 @@ class GeminiProvider(BaseLLMProvider):
         try:
             genai.configure(api_key=self.api_key)
             self.client = genai.GenerativeModel(self.model)
-            # Test API connection
-            response = self.client.generate_content("test")
-            response.text
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Gemini: {e}")
@@ -155,15 +140,13 @@ class GeminiProvider(BaseLLMProvider):
             "model": self.model
         }
 
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            # Convert messages to Gemini format
-            prompt = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
-            response = self.client.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            logger.error(f"Error generating Gemini response: {e}")
-            return ""
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        return LLM(
+            model=self.model,
+            temperature=temperature,
+            base_url="https://generativelanguage.googleapis.com/v1",
+            api_key=self.api_key
+        )
 
 
 class MistralProvider(BaseLLMProvider):
@@ -182,12 +165,6 @@ class MistralProvider(BaseLLMProvider):
     async def initialize(self) -> bool:
         try:
             self.client = Mistral(api_key=self.api_key)
-            # Test API connection
-            messages = [{"role": "user", "content": "test"}]
-            response = self.client.chat.complete(
-                model=self.model,
-                messages=messages
-            )
             return True
         except Exception as e:
             logger.error(f"Failed to initialize Mistral: {e}")
@@ -199,26 +176,13 @@ class MistralProvider(BaseLLMProvider):
             "model": self.model
         }
 
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            # Convert messages to Mistral format
-            mistral_messages = []
-            for msg in messages:
-                if msg["role"] == "system":
-                    mistral_messages.append(SystemMessage(content=msg["content"]))
-                elif msg["role"] == "user":
-                    mistral_messages.append(UserMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    mistral_messages.append(AssistantMessage(content=msg["content"]))
-
-            response = await self.client.chat.complete_async(
-                model=self.model,
-                messages=mistral_messages
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"Error generating Mistral response: {e}")
-            return ""
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        return LLM(
+            model=self.model,
+            temperature=temperature,
+            base_url="https://api.mistral.ai/v1",
+            api_key=self.api_key
+        )
 
 
 class LLMFactory:

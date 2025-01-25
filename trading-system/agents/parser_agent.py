@@ -3,6 +3,7 @@ from crewai import Agent, Crew
 from .base_agent import BaseAgent
 from .tools.parser_tools import SignalData, SignalParserTool, TelegramListenerTool
 import asyncio
+from typing import Dict, Any
 
 
 class ParserAgent(BaseAgent):
@@ -14,25 +15,27 @@ class ParserAgent(BaseAgent):
         api_session_token: str,
         channel_url: str,
         message_callback,
-        openai_api_key: str
+        llm_config: Dict[str, Any]
     ):
-        super().__init__(name)
+        super().__init__(name, llm_config)
         self.channel_url = channel_url
         self.message_callback = message_callback
-        self.openai_api_key = openai_api_key
 
         # Initialize Telegram tool
         self.telegram_tool = TelegramListenerTool(api_id, api_hash, api_session_token)
         self.telegram_tool.add_message_handler(self.process_message)
         self.add_tool(self.telegram_tool)
 
+        # Initialize parser tool
+        self.parser_tool = SignalParserTool()
+        self.add_tool(self.parser_tool)
+
         # Initialize Crew AI components
         self._setup_crew()
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
-        # Create tools
-        self.parser_tool = SignalParserTool()
+        llm = self.llm_provider.get_crew_llm(temperature=0.7)
         
         self.signal_parser = Agent(
             role="Signal Parser",
@@ -42,7 +45,7 @@ class ParserAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.parser_tool],
-            llm_config={"api_key": self.openai_api_key}
+            llm=llm
         )
 
         self.signal_validator = Agent(
@@ -52,8 +55,8 @@ class ParserAgent(BaseAgent):
             complete, and meaningful. You check for missing data and validate price levels.""",
             verbose=True,
             allow_delegation=False,
-            tools=[self.parser_tool],  # Use the same tool for validation
-            llm_config={"api_key": self.openai_api_key}
+            tools=[self.parser_tool],
+            llm=llm
         )
 
         self.crew = Crew(
@@ -63,7 +66,7 @@ class ParserAgent(BaseAgent):
         )
 
     async def process_message(self, event):
-        """Process incoming Telegram message using Crew AI"""
+        """Process incoming Telegram message"""
         try:
             if not self.state.is_active:
                 self.logger.warning("Agent not active, skipping message processing")
@@ -144,6 +147,9 @@ class ParserAgent(BaseAgent):
 
     async def initialize(self):
         """Initialize the parser agent"""
+        if not await super().initialize():
+            return False
+
         self.logger.info("Initializing Parser Agent...")
         result = await self.telegram_tool.initialize()
         if not result['success']:
