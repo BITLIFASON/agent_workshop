@@ -1,8 +1,7 @@
-import asyncio
-import aio_pika
-import aiohttp
-import asyncpg
+import os
 from typing import Dict, Any
+import asyncio
+from dotenv import load_dotenv
 from loguru import logger
 from .parser_agent import ParserAgent
 from .balance_control_agent import BalanceControlAgent
@@ -10,209 +9,129 @@ from .trading_agent import TradingAgent
 
 class TradingSystem:
     def __init__(self, config: Dict[str, Any]):
-        """
-        Initialize trading system with all agents
-
-        Args:
-            config: Configuration dictionary containing all necessary settings
-        """
+        """Initialize trading system with configuration"""
         self.config = config
-        self.agents = {}
-        self._setup_logger()
-        self.max_connection_attempts = 3  # Максимальное кол-во попыток
-        self.connection_retry_delay = 5    # Задержка между попытками в секундах
+        self.openai_api_key = config.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
+        if not self.openai_api_key:
+            raise ValueError("OpenAI API key is required")
 
-    def _setup_logger(self):
-        """Setup system-wide logger"""
-        logger.add(
-            "logs/trading_system.log",
-            rotation="500 MB",
-            level="INFO",
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
-        )
-        self.logger = logger.bind(system="trading_system")
+        # Initialize agents
+        self.initialize_agents()
 
-    async def _wait_for_services(self):
-        """Wait for dependent services to be ready"""
-
-        # Wait for PostgreSQL
-        attempt = 0
-        while attempt < self.max_connection_attempts:
-            try:
-                conn = await asyncpg.connect(
-                    user=self.config['database']['user'],
-                    password=self.config['database']['password'],
-                    database=self.config['database']['database'],
-                    host=self.config['database']['host'],
-                    port=self.config['database']['port']
-                )
-                await conn.close()
-                self.logger.info("Successfully connected to PostgreSQL")
-                break
-            except Exception as e:
-                attempt += 1
-                if attempt >= self.max_connection_attempts:
-                    raise Exception(f"Failed to connect to PostgreSQL after {self.max_connection_attempts} attempts: {e}")
-                self.logger.warning(f"Waiting for PostgreSQL (attempt {attempt}/{self.max_connection_attempts}): {e}")
-                await asyncio.sleep(self.connection_retry_delay)
-
-        # Wait for Management API
-        attempt = 0
-        while attempt < self.max_connection_attempts:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    url = f"http://{self.config['management_api']['host']}:{self.config['management_api']['port']}/health"
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            self.logger.info("Successfully connected to Management API")
-                            break
-                        else:
-                            raise Exception(f"Management API returned status {response.status}")
-            except Exception as e:
-                attempt += 1
-                if attempt >= self.max_connection_attempts:
-                    raise Exception(f"Failed to connect to Management API after {self.max_connection_attempts} attempts: {e}")
-                self.logger.warning(f"Waiting for Management API (attempt {attempt}/{self.max_connection_attempts}): {e}")
-                await asyncio.sleep(self.connection_retry_delay)
-
-    async def _init_database(self):
-        """Initialize database tables"""
+    def initialize_agents(self):
+        """Initialize all trading system agents"""
         try:
-            # Create connection pool
-            self.db_pool = await asyncpg.create_pool(
-                user=self.config['database']['user'],
-                password=self.config['database']['password'],
-                database=self.config['database']['database'],
-                host=self.config['database']['host'],
-                port=self.config['database']['port']
-            )
-
-            # Create tables
-            async with self.db_pool.acquire() as conn:
-                # Create active lots table
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS active_lots (
-                        id         SERIAL PRIMARY KEY,
-                        symbol     VARCHAR(20)    NOT NULL,
-                        qty        NUMERIC(20, 8) NOT NULL,
-                        price      NUMERIC(20, 8) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                ''')
-
-                # Create history lots table
-                await conn.execute('''
-                    CREATE TABLE IF NOT EXISTS history_lots (
-                        id         SERIAL PRIMARY KEY,
-                        action     VARCHAR(10)    NOT NULL,
-                        symbol     VARCHAR(20)    NOT NULL,
-                        qty        NUMERIC(20, 8) NOT NULL,
-                        price      NUMERIC(20, 8) NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                ''')
-
-            logger.info("Database tables initialized successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
-
-    async def initialize(self):
-        """Initialize all agents and establish connections"""
-        try:
-
-            # Verify connection to required services
-            try:
-                await self._wait_for_services()
-            except Exception as e:
-                raise Exception(f"Failed to connect to required services: {e}")
-
-            # Initialize database
-            try:
-                await self._init_database()
-            except Exception as e:
-                raise Exception(f"Failed to initialize database: {e}")
-
-            # Initialize Parser Agent
-            self.agents['parser'] = ParserAgent(
-                name="signal_parser",
-                api_id=self.config['telegram']['api_id'],
-                api_hash=self.config['telegram']['api_hash'],
-                api_session_token=self.config['telegram']['api_session_token'],
-                channel_url=self.config['telegram']['channel_url'],
-                message_callback=self._handle_parsed_signal
+            # Initialize Trading Agent
+            self.trading_agent = TradingAgent(
+                name="trading_executor",
+                bybit_config=self.config["bybit"],
+                openai_api_key=self.openai_api_key
             )
 
             # Initialize Balance Control Agent
-            self.agents['balance_control'] = BalanceControlAgent(
+            self.balance_control_agent = BalanceControlAgent(
                 name="balance_controller",
-                config=self.config,
-                trading_callback=self._handle_trade_decision
+                config={
+                    "management_api": self.config["management_api"],
+                    "database": self.config["database"],
+                    "bybit": self.config["bybit"]
+                },
+                trading_callback=self.trading_agent.execute_trade,
+                openai_api_key=self.openai_api_key
             )
 
-            # Initialize Trading Agent
-            self.agents['trading'] = TradingAgent(
-                name="trade_executor",
-                bybit_config=self.config['bybit'],
-                execution_callback=self._handle_trade_execution
+            # Initialize Parser Agent
+            self.parser_agent = ParserAgent(
+                name="signal_parser",
+                api_id=self.config["telegram"]["api_id"],
+                api_hash=self.config["telegram"]["api_hash"],
+                api_session_token=self.config["telegram"]["session_token"],
+                channel_url=self.config["telegram"]["channel_url"],
+                message_callback=self.process_signal,
+                openai_api_key=self.openai_api_key
             )
+
+            logger.info("All agents initialized successfully")
+
+        except Exception as e:
+            logger.error(f"Error initializing agents: {e}")
+            raise
+
+    async def process_signal(self, signal_data: dict):
+        """Process trading signal through the system"""
+        try:
+            logger.info(f"Processing signal: {signal_data}")
+            
+            # Validate trade through balance control
+            is_valid = await self.balance_control_agent.validate_trade(signal_data)
+            
+            if is_valid:
+                logger.info("Signal validated, proceeding with execution")
+                await self.balance_control_agent.process_signal(signal_data)
+            else:
+                logger.warning("Signal validation failed")
+
+        except Exception as e:
+            logger.error(f"Error processing signal: {e}")
+
+    async def initialize(self) -> bool:
+        """Initialize the trading system"""
+        try:
+            logger.info("Initializing trading system...")
 
             # Initialize all agents
-            for name, agent in self.agents.items():
-                if not await agent.initialize():
-                    raise Exception(f"Failed to initialize {name} agent")
-                self.logger.info(f"Successfully initialized {name} agent")
+            initialization_tasks = [
+                self.parser_agent.initialize(),
+                self.balance_control_agent.initialize(),
+                self.trading_agent.initialize()
+            ]
+            
+            results = await asyncio.gather(*initialization_tasks)
+            
+            if not all(results):
+                logger.error("Failed to initialize all agents")
+                return False
 
+            logger.info("Trading system initialized successfully")
             return True
 
         except Exception as e:
-            self.logger.error(f"System initialization failed: {e}")
+            logger.error(f"Error initializing trading system: {e}")
             return False
 
-    async def _handle_parsed_signal(self, signal: Dict[str, Any]):
-        """Handle signals from Parser Agent"""
-        try:
-            self.logger.info(f"Received trading signal: {signal}")
-            await self.agents['balance_control'].process_signal(signal)
-        except Exception as e:
-            self.logger.error(f"Error handling parsed signal: {e}")
-
-    async def _handle_trade_decision(self, trade_signal: Dict[str, Any]):
-        """Handle trade decisions from Balance Control Agent"""
-        try:
-            self.logger.info(f"Received trade decision: {trade_signal}")
-            await self.agents['trading'].execute_trade(trade_signal)
-        except Exception as e:
-            self.logger.error(f"Error handling trade decision: {e}")
-
-    async def _handle_trade_execution(self, result: Dict[str, Any]):
-        """Handle trade execution results"""
-        self.logger.info(f"Trade execution result: {result}")
-
     async def start(self):
-        """Start all agents"""
+        """Start the trading system"""
         try:
-            # Create tasks for each agent
-            tasks = []
-            for name, agent in self.agents.items():
-                tasks.append(asyncio.create_task(
-                    agent.run(),
-                    name=f"{name}_task"
-                ))
-            self.logger.info("All agents started")
+            logger.info("Starting trading system...")
 
-            # Wait for all tasks
-            await asyncio.gather(*tasks)
+            # Start agent execution loops
+            agent_tasks = [
+                self.parser_agent.run(),
+                self.balance_control_agent.run(),
+                self.trading_agent.run()
+            ]
+
+            logger.info("Trading system started successfully")
+            await asyncio.gather(*agent_tasks)
 
         except Exception as e:
-            self.logger.error(f"Error in system operation: {e}")
+            logger.error(f"Error starting trading system: {e}")
             await self.shutdown()
 
     async def shutdown(self):
-        """Shutdown all agents and cleanup"""
-        for name, agent in self.agents.items():
-            try:
-                await agent.cleanup()
-                self.logger.info(f"Successfully shutdown {name} agent")
-            except Exception as e:
-                self.logger.error(f"Error shutting down {name} agent: {e}")
+        """Shutdown the trading system"""
+        try:
+            logger.info("Shutting down trading system...")
+            
+            # Cleanup all agents
+            cleanup_tasks = [
+                self.parser_agent.cleanup(),
+                self.balance_control_agent.cleanup(),
+                self.trading_agent.cleanup()
+            ]
+            
+            await asyncio.gather(*cleanup_tasks)
+            logger.info("Trading system shutdown complete")
+
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")

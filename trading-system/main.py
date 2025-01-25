@@ -10,7 +10,6 @@ async def main():
     setup_logging()
 
     try:
-
         # Create trading system
         system = TradingSystem(load_config())
 
