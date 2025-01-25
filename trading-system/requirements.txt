@@ -1,7 +1,6 @@
-telethon==1.38.1
-pybit==5.8.0
-loguru==0.7.2
-pydantic==2.6.1
-asyncpg==0.29.0
-aio-pika==9.3.1
-aiohttp==3.9.1
+crewai>=0.16.1
+telethon>=1.33.1
+pydantic>=2.5.3
+loguru>=0.7.2
+python-dotenv>=1.0.0
+langchain>=0.1.0 
