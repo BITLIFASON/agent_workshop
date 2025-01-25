@@ -31,20 +31,26 @@ async def api_get_system_status(request: Request, api_key: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch system status: {str(e)}")
 
 @router.get("/set_system_status/{system_status}")
-async def api_set_system_status(system_status, request: Request, api_key: str):
+async def api_set_system_status(system_status: str, request: Request, api_key: str):
     """
     Set the current system status.
 
     Args:
-        system_status (str): The new system status.
+        system_status (str): The new system status. Must be either 'enable' or 'disable'.
         api_key (str): The API token for authorization.
 
     Returns:
         dict: Status of the set operation.
 
     Raises:
-        HTTPException: If an error occurs during setting.
+        HTTPException: If system_status is invalid or if an error occurs during setting.
     """
+    if system_status not in ['enable', 'disable']:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid system status. Must be either 'enable' or 'disable'."
+        )
+        
     try:
         validate_token(api_key)
         request.app.state.trading_state["enable_trading_system"] = system_status
@@ -160,11 +166,12 @@ async def api_set_num_available_lots(num_available_lots: int, request: Request, 
         raise HTTPException(status_code=500, detail=f"Failed to set number available_lots: {str(e)}")
 
 @router.get("/get_active_lots")
-async def api_get_active_lots(api_key: str):
+async def api_get_active_lots(request: Request, api_key: str):
     """
     Get the active lots from the system state.
 
     Args:
+        request (Request): The FastAPI request object.
         api_key (str): The API token for authorization.
 
     Returns:
@@ -172,7 +179,7 @@ async def api_get_active_lots(api_key: str):
     """
     try:
         validate_token(api_key)
-        return await fetch_active_lots()
+        return await fetch_active_lots(request)
     except Exception as e:
         logger.error(f"Error fetching active lots: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch active lots: {str(e)}")

@@ -6,6 +6,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 from .base_agent import BaseAgent
 from .tools.parser_tools import SignalData, SignalParserTool, TelegramListenerTool
+import asyncio
 
 
 class ParserAgent(BaseAgent):
@@ -26,6 +27,7 @@ class ParserAgent(BaseAgent):
 
         # Initialize Telegram tool
         self.telegram_tool = TelegramListenerTool(api_id, api_hash, api_session_token)
+        self.telegram_tool.add_message_handler(self.process_message)
         self.add_tool(self.telegram_tool)
 
         # Initialize Crew AI components
@@ -113,12 +115,14 @@ class ParserAgent(BaseAgent):
                 self.logger.error("Agent not initialized")
                 return
 
-            @self.telegram_tool.client.on(events.NewMessage(chats=[self.channel_url]))
-            async def message_handler(event):
-                await self.process_message(event)
+            result = await self.telegram_tool.start_listening(self.channel_url)
+            if not result['success']:
+                self.logger.error(f"Failed to start listening: {result.get('error')}")
+                return
 
-            self.logger.info(f"Started listening to channel: {self.channel_url}")
-            await self.telegram_tool.client.run_until_disconnected()
+            # Keep the agent running
+            while self.state.is_active:
+                await asyncio.sleep(1)
 
         except Exception as e:
             self.logger.error(f"Error in main loop: {e}")
@@ -129,8 +133,8 @@ class ParserAgent(BaseAgent):
         """Initialize the parser agent"""
         self.logger.info("Initializing Parser Agent...")
         result = await self.telegram_tool.initialize()
-        if not result.success:
-            self.logger.error(f"Failed to initialize Telegram tool: {result.error}")
+        if not result['success']:
+            self.logger.error(f"Failed to initialize Telegram tool: {result.get('error')}")
             return False
 
         self.state.is_active = True

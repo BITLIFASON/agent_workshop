@@ -111,8 +111,8 @@ class TradingSystem:
                 self.trading_agent.run()
             ]
 
-            logger.info("Trading system started successfully")
             await asyncio.gather(*agent_tasks)
+            logger.info("Trading system started successfully")
 
         except Exception as e:
             logger.error(f"Error starting trading system: {e}")

@@ -8,6 +8,7 @@ from telethon.sessions import StringSession
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 from loguru import logger
+from telethon import events
 
 
 class SignalData(BaseModel):
@@ -163,23 +164,48 @@ class TelegramListenerTool(BaseTool):
 
     def __init__(self, api_id: int, api_hash: str, session_token: str):
         super().__init__()
-        self.client = TelegramClient(session_token, api_id, api_hash)
+        self.client = TelegramClient(StringSession(session_token), api_id, api_hash)
+        self._message_handlers = []
 
-    async def initialize(self):
+    def add_message_handler(self, handler):
+        """Add a message handler callback"""
+        self._message_handlers.append(handler)
+
+    async def initialize(self) -> Dict[str, Any]:
         """Initialize Telegram client"""
         try:
             await self.client.start()
             return {'success': True}
         except Exception as e:
+            logger.error(f"Failed to initialize Telegram client: {e}")
             return {'success': False, 'error': str(e)}
 
     async def cleanup(self):
         """Cleanup Telegram client"""
-        if self.client:
+        if self.client and self.client.is_connected():
             await self.client.disconnect()
 
     def _run(self, *args, **kwargs):
         raise NotImplementedError("This tool only supports async operation")
 
-    async def _arun(self, *args, **kwargs):
-        raise NotImplementedError("This tool doesn't support direct execution")
+    async def start_listening(self, channel_url: str):
+        """Start listening to messages from the specified channel"""
+        try:
+            if not self.client.is_connected():
+                await self.initialize()
+
+            @self.client.on(events.NewMessage(chats=[channel_url]))
+            async def message_handler(event):
+                for handler in self._message_handlers:
+                    await handler(event)
+
+            logger.info(f"Started listening to channel: {channel_url}")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error starting listener: {e}")
+            return {'success': False, 'error': str(e)}
+
+    async def _arun(self, channel_url: str) -> Dict[str, Any]:
+        """Start listening to the specified channel"""
+        return await self.start_listening(channel_url)
