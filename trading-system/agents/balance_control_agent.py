@@ -220,21 +220,45 @@ class BalanceControlAgent(BaseAgent):
 
     async def initialize(self):
         """Initialize the balance control agent"""
-        self.logger.info("Initializing Balance Control Agent...")
-        
-        # Initialize database
-        db_result = await self.db_tool.initialize()
-        if not db_result.success:
-            self.logger.error(f"Failed to initialize database: {db_result.error}")
-            return False
+        try:
+            self.logger.info("Initializing Balance Control Agent...")
+            
+            # Initialize tools
+            db_init = await self.db_tool.initialize()
+            if not db_init.success:
+                self.logger.error(f"Failed to initialize database tool: {db_init.error}")
+                return False
 
-        self.state.is_active = True
-        return True
+            # Test management service connection
+            status = await self.management_tool.execute("get_system_status")
+            if not status.success:
+                self.logger.error(f"Failed to connect to management service: {status.error}")
+                return False
+
+            # Test trading tool connection
+            balance = await self.trading_tool.execute("get_wallet_balance")
+            if not balance.success:
+                self.logger.error(f"Failed to connect to trading service: {balance.error}")
+                return False
+
+            self.state.is_active = True
+            self.logger.info("Balance Control Agent initialized successfully")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Balance Control Agent: {e}")
+            return False
 
     async def cleanup(self):
         """Cleanup resources"""
-        await self.db_tool.cleanup()
-        await super().cleanup()
+        try:
+            if hasattr(self.db_tool, 'cleanup'):
+                await self.db_tool.cleanup()
+            if hasattr(self.trading_tool, 'cleanup'):
+                await self.trading_tool.cleanup()
+            await super().cleanup()
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
 
     async def run(self):
         """Main execution loop"""

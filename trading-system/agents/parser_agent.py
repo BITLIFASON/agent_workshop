@@ -35,6 +35,9 @@ class ParserAgent(BaseAgent):
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
+        # Create tools
+        self.parser_tool = SignalParserTool()
+        
         self.signal_parser = Agent(
             role="Signal Parser",
             goal="Extract accurate trading signals from messages",
@@ -42,7 +45,7 @@ class ParserAgent(BaseAgent):
             You can identify key trading information and filter out noise.""",
             verbose=True,
             allow_delegation=False,
-            tools=[SignalParserTool()],
+            tools=[self.parser_tool],
             llm_config={"api_key": self.openai_api_key}
         )
 
@@ -53,6 +56,7 @@ class ParserAgent(BaseAgent):
             complete, and meaningful. You check for missing data and validate price levels.""",
             verbose=True,
             allow_delegation=False,
+            tools=[self.parser_tool],  # Use the same tool for validation
             llm_config={"api_key": self.openai_api_key}
         )
 
@@ -65,6 +69,10 @@ class ParserAgent(BaseAgent):
     async def process_message(self, event):
         """Process incoming Telegram message using Crew AI"""
         try:
+            if not self.state.is_active:
+                self.logger.warning("Agent not active, skipping message processing")
+                return
+
             # Create parsing task
             parsing_task = Task(
                 description=f"Parse the following message into a trading signal: {event.message.message}",

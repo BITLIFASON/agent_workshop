@@ -15,20 +15,20 @@ class TradingSystem:
         if not self.openai_api_key:
             raise ValueError("OpenAI API key is required")
 
-        # Initialize agents
-        self.initialize_agents()
+        # Create agents (without initialization)
+        self._create_agents()
 
-    def initialize_agents(self):
-        """Initialize all trading system agents"""
+    def _create_agents(self):
+        """Create agent instances without initialization"""
         try:
-            # Initialize Trading Agent
+            # Create Trading Agent
             self.trading_agent = TradingAgent(
                 name="trading_executor",
                 bybit_config=self.config["bybit"],
                 openai_api_key=self.openai_api_key
             )
 
-            # Initialize Balance Control Agent
+            # Create Balance Control Agent
             self.balance_control_agent = BalanceControlAgent(
                 name="balance_controller",
                 config={
@@ -40,7 +40,7 @@ class TradingSystem:
                 openai_api_key=self.openai_api_key
             )
 
-            # Initialize Parser Agent
+            # Create Parser Agent
             self.parser_agent = ParserAgent(
                 name="signal_parser",
                 api_id=self.config["telegram"]["api_id"],
@@ -51,10 +51,8 @@ class TradingSystem:
                 openai_api_key=self.openai_api_key
             )
 
-            logger.info("All agents initialized successfully")
-
         except Exception as e:
-            logger.error(f"Error initializing agents: {e}")
+            logger.error(f"Error creating agents: {e}")
             raise
 
     async def process_signal(self, signal_data: dict):
@@ -79,18 +77,23 @@ class TradingSystem:
         try:
             logger.info("Initializing trading system...")
 
-            # Initialize all agents
+            # Initialize all agents in parallel
             initialization_tasks = [
                 self.parser_agent.initialize(),
                 self.balance_control_agent.initialize(),
                 self.trading_agent.initialize()
             ]
             
-            results = await asyncio.gather(*initialization_tasks)
+            results = await asyncio.gather(*initialization_tasks, return_exceptions=True)
             
-            if not all(results):
-                logger.error("Failed to initialize all agents")
-                return False
+            # Check for exceptions
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(f"Agent initialization failed: {result}")
+                    return False
+                if not result:  # Check boolean result
+                    logger.error("One or more agents failed to initialize")
+                    return False
 
             logger.info("Trading system initialized successfully")
             return True

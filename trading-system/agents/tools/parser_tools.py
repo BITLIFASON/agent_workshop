@@ -9,6 +9,7 @@ from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 from loguru import logger
 from telethon import events
+import asyncio
 
 
 class SignalData(BaseModel):
@@ -166,6 +167,8 @@ class TelegramListenerTool(BaseTool):
         super().__init__()
         self.client = TelegramClient(StringSession(session_token), api_id, api_hash)
         self._message_handlers = []
+        self._is_listening = False
+        self._disconnect_event = None
 
     def add_message_handler(self, handler):
         """Add a message handler callback"""
@@ -174,7 +177,9 @@ class TelegramListenerTool(BaseTool):
     async def initialize(self) -> Dict[str, Any]:
         """Initialize Telegram client"""
         try:
-            await self.client.start()
+            if not self.client.is_connected():
+                await self.client.start()
+            self._disconnect_event = asyncio.Event()
             return {'success': True}
         except Exception as e:
             logger.error(f"Failed to initialize Telegram client: {e}")
@@ -182,8 +187,14 @@ class TelegramListenerTool(BaseTool):
 
     async def cleanup(self):
         """Cleanup Telegram client"""
-        if self.client and self.client.is_connected():
-            await self.client.disconnect()
+        try:
+            self._is_listening = False
+            if self._disconnect_event:
+                self._disconnect_event.set()
+            if self.client and self.client.is_connected():
+                await self.client.disconnect()
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
 
     def _run(self, *args, **kwargs):
         raise NotImplementedError("This tool only supports async operation")
@@ -194,12 +205,29 @@ class TelegramListenerTool(BaseTool):
             if not self.client.is_connected():
                 await self.initialize()
 
+            if self._is_listening:
+                logger.warning("Already listening to channel")
+                return {'success': True}
+
             @self.client.on(events.NewMessage(chats=[channel_url]))
             async def message_handler(event):
-                for handler in self._message_handlers:
-                    await handler(event)
+                try:
+                    for handler in self._message_handlers:
+                        await handler(event)
+                except Exception as e:
+                    logger.error(f"Error in message handler: {e}")
 
+            self._is_listening = True
             logger.info(f"Started listening to channel: {channel_url}")
+
+            # Run the client until disconnect event is set
+            try:
+                await self.client.run_until_disconnected()
+            except Exception as e:
+                if not self._disconnect_event.is_set():
+                    logger.error(f"Unexpected disconnect: {e}")
+                    return {'success': False, 'error': str(e)}
+
             return {'success': True}
 
         except Exception as e:
