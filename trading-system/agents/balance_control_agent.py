@@ -1,17 +1,24 @@
 from typing import Dict, Any, Callable
+from datetime import datetime
 import asyncio
+from crewai import Agent, Task, Crew
 from .base_agent import BaseAgent
-from .tools.balance_tools import DatabaseTool, ManagementServiceTool, BybitTradingTool
+from .tools.balance_tools import (
+    DatabaseTool,
+    ManagementServiceTool,
+    BybitTradingTool
+)
 
 class BalanceControlAgent(BaseAgent):
     def __init__(
         self,
         name: str,
         config: Dict[str, Any],
-        trading_callback: Callable
+        trading_callback: Callable,
+        openai_api_key: str
     ):
         super().__init__(name)
-
+        
         # Initialize tools
         self.management_tool = ManagementServiceTool(config['management_api'])
         self.db_tool = DatabaseTool(config['database'])
@@ -22,19 +29,53 @@ class BalanceControlAgent(BaseAgent):
         self.add_tool(self.trading_tool)
 
         self.trading_callback = trading_callback
+        self.openai_api_key = openai_api_key
 
-    async def initialize(self):
-        """Initialize the balance control agent"""
-        self.logger.info("Initializing Balance Control Agent...")
+        # Initialize Crew AI components
+        self._setup_crew()
 
-        # Initialize database tool
-        db_result = await self.db_tool.initialize()
-        if not db_result.success:
-            self.logger.error(f"Failed to initialize database tool: {db_result.error}")
-            return False
+    def _setup_crew(self):
+        """Setup Crew AI agents and tasks"""
+        self.system_monitor = Agent(
+            role="System Monitor",
+            goal="Monitor system status and validate trading conditions",
+            backstory="""You are responsible for monitoring the trading system's status,
+            checking price limits, fake balance, and available lots. You ensure all
+            trading conditions are met before allowing a trade.""",
+            verbose=True,
+            allow_delegation=False,
+            tools=[self.management_tool],
+            llm_config={"api_key": self.openai_api_key}
+        )
 
-        self.state.is_active = True
-        return True
+        self.trade_analyzer = Agent(
+            role="Trade Analyzer",
+            goal="Analyze trades and calculate optimal position sizes",
+            backstory="""You are a trading specialist who analyzes trades and determines
+            optimal position sizes based on system constraints, fake balance, and available lots.
+            You use the Bybit API to get symbol information and calculate quantities.""",
+            verbose=True,
+            allow_delegation=False,
+            tools=[self.trading_tool],
+            llm_config={"api_key": self.openai_api_key}
+        )
+
+        self.db_manager = Agent(
+            role="Database Manager",
+            goal="Manage trading records and history",
+            backstory="""You are responsible for maintaining accurate records of
+            all trading activities, lots, and historical data.""",
+            verbose=True,
+            allow_delegation=False,
+            tools=[self.db_tool],
+            llm_config={"api_key": self.openai_api_key}
+        )
+
+        self.crew = Crew(
+            agents=[self.system_monitor, self.trade_analyzer, self.db_manager],
+            tasks=[],
+            verbose=True
+        )
 
     async def process_signal(self, signal: Dict[str, Any]):
         """Process incoming trading signal"""
@@ -57,68 +98,92 @@ class BalanceControlAgent(BaseAgent):
             self.state.last_error = str(e)
 
     async def _process_buy_signal(self, signal: Dict[str, Any]):
-        """Process buy signal"""
+        """Process buy signal using Crew AI"""
         try:
-            # Get system status
-            status_result = await self.management_tool.execute("get_system_status")
-            if not status_result.success or status_result.data != "enable":
+            # Check system status and constraints
+            system_task = Task(
+                description="""Check trading system status and constraints:
+                1. Is system enabled?
+                2. Get current price limit
+                3. Get fake balance
+                4. Get number of available lots""",
+                agent=self.system_monitor
+            )
+            system_result = await self.crew.kickoff([system_task])
+
+            if not system_result.get("system_enabled", False):
                 self.logger.warning("Trading system is not enabled")
                 return
 
-            # Check price limit
-            price_limit_result = await self.management_tool.execute("get_price_limit")
-            if not price_limit_result.success:
-                raise Exception(f"Failed to get price limit: {price_limit_result.error}")
-
-            if signal["price"] > price_limit_result.data:
-                self.logger.warning(f"Price {signal['price']} exceeds limit {price_limit_result.data}")
+            if system_result.get("price_exceeded", False):
+                self.logger.warning(f"Price {signal['price']} exceeds limit")
                 return
 
-            # Check available lots
-            num_available_lots_result = await self.management_tool.execute("get_num_available_lots")
-            if not num_available_lots_result.success:
-                raise Exception(f"Failed to get available lots: {num_available_lots_result.error}")
-            num_available_lots = num_available_lots_result.data
+            fake_balance = system_result.get("fake_balance", 0)
+            available_lots = system_result.get("available_lots", 0)
 
-            # Get fake balance
-            fake_balance_result = await self.management_tool.execute("get_fake_balance")
-            if not fake_balance_result.success:
-                raise Exception(f"Failed to get balance: {fake_balance_result.error}")
-            fake_balance = fake_balance_result.data
+            if available_lots <= 0:
+                self.logger.warning("No available lots")
+                return
 
-            # Calculate quantity
-            qty = await self._calculate_quantity(
-                signal["symbol"],
-                fake_balance,
-                signal["price"],
-                num_available_lots
+            # Calculate position size
+            analysis_task = Task(
+                description=f"""Analyze trade and calculate position size:
+                Symbol: {signal['symbol']}
+                Price: {signal['price']}
+                Fake Balance: {fake_balance}
+                Available Lots: {available_lots}
+                
+                1. Get symbol trading limits from Bybit
+                2. Calculate optimal quantity based on fake balance and lots
+                3. Validate against symbol limits""",
+                agent=self.trade_analyzer
             )
+            analysis_result = await self.crew.kickoff([analysis_task])
 
-            # Process trade
+            qty = analysis_result.get("position_size")
+            if not qty:
+                self.logger.warning("Failed to calculate position size")
+                return
+
+            # Execute trade
             trade_signal = {
                 "symbol": signal["symbol"],
                 "action": "buy",
                 "qty": qty
             }
-
             await self.trading_callback(trade_signal)
 
-            await self.db_tool.execute("create_lot", signal["symbol"], qty, signal["price"])
-            await self.db_tool.execute("create_history_lot","buy", signal["symbol"], qty, signal["price"])
+            # Record in database
+            db_task = Task(
+                description=f"""Record buy transaction:
+                Symbol: {signal['symbol']}
+                Quantity: {qty}
+                Price: {signal['price']}
+                
+                1. Create new lot record
+                2. Create history record""",
+                agent=self.db_manager
+            )
+            await self.crew.kickoff([db_task])
 
         except Exception as e:
             self.logger.error(f"Error processing buy signal: {e}")
             raise
 
     async def _process_sell_signal(self, signal: Dict[str, Any]):
-        """Process sell signal"""
+        """Process sell signal using Crew AI"""
         try:
-            # Check if we have this lot
-            active_lots = await self.db_tool.execute("get_active_lots")
-            if not active_lots.success:
-                raise Exception(f"Failed to get active lots: {active_lots.error}")
+            # Check active lots
+            db_task = Task(
+                description=f"""Check active lots for {signal['symbol']}:
+                1. Get active lot information
+                2. Verify lot exists""",
+                agent=self.db_manager
+            )
+            result = await self.crew.kickoff([db_task])
 
-            lot = next((lot for lot in active_lots.data if lot["symbol"] == signal["symbol"]), None)
+            lot = result.get("active_lot")
             if not lot:
                 self.logger.warning(f"No active lot found for {signal['symbol']}")
                 return
@@ -132,10 +197,17 @@ class BalanceControlAgent(BaseAgent):
             await self.trading_callback(trade_signal)
 
             # Record transaction
-            await self.db_tool.execute("delete_lot", signal["symbol"])
-            await self.db_tool.execute("create_history_lot","sell",signal["symbol"],lot["qty"],signal["price"])
-
-            # FIX add delta profit
+            record_task = Task(
+                description=f"""Record sell transaction:
+                Symbol: {signal['symbol']}
+                Quantity: {lot['qty']}
+                Price: {signal['price']}
+                
+                1. Delete active lot
+                2. Create history record""",
+                agent=self.db_manager
+            )
+            await self.crew.kickoff([record_task])
 
         except Exception as e:
             self.logger.error(f"Error processing sell signal: {e}")
@@ -146,38 +218,18 @@ class BalanceControlAgent(BaseAgent):
         required_fields = ["symbol", "action", "price"]
         return all(field in signal for field in required_fields)
 
-    async def _calculate_quantity(self, symbol:str, fake_balance: float, price: float, num_available_lots: int) -> float:
-        """Calculate trading quantity based on available balance"""
+    async def initialize(self):
+        """Initialize the balance control agent"""
+        self.logger.info("Initializing Balance Control Agent...")
+        
+        # Initialize database
+        db_result = await self.db_tool.initialize()
+        if not db_result.success:
+            self.logger.error(f"Failed to initialize database: {db_result.error}")
+            return False
 
-        result_symbol_wallet_balance = await self.trading_tool.execute(operation="get_coin_balance", symbol=symbol)
-        if not result_symbol_wallet_balance.success:
-            raise Exception(f"Failed to get active lots: {result_symbol_wallet_balance.error}")
-        symbol_wallet_balance = result_symbol_wallet_balance.data
-
-        result_symbol_qty_info = await self.trading_tool.execute(operation="get_coin_info", symbol=symbol)
-        if not result_symbol_qty_info.success:
-            raise Exception(f"Failed to get active lots: {result_symbol_qty_info.error}")
-        symbol_qty_info = result_symbol_qty_info.data
-        max_qty = symbol_qty_info.get("max_qty")
-        min_qty = symbol_qty_info.get("min_qty")
-        step_qty = symbol_qty_info.get("step_qty")
-        min_order_usdt = symbol_qty_info.get("min_order_usdt")
-
-        if len(step_qty.split('.')) == 1:
-            precision_qty = 0
-        else:
-            precision_qty = len(step_qty.split('.')[1])
-
-        qty = fake_balance / num_available_lots / price
-        qty -= symbol_wallet_balance
-
-        qty = round(qty, precision_qty)
-        if qty * price < min_order_usdt and qty < min_qty:
-            qty = 0
-        elif qty > max_qty:
-            qty = max_qty
-
-        return qty
+        self.state.is_active = True
+        return True
 
     async def cleanup(self):
         """Cleanup resources"""
@@ -188,4 +240,18 @@ class BalanceControlAgent(BaseAgent):
         """Main execution loop"""
         self.logger.info("Balance Control Agent running...")
         while self.state.is_active:
-            await asyncio.sleep(1)  # Prevent CPU overload
+            try:
+                # Monitor system status
+                status_task = Task(
+                    description="""Monitor system parameters:
+                    1. Check system status
+                    2. Verify price limits
+                    3. Monitor fake balance
+                    4. Track available lots""",
+                    agent=self.system_monitor
+                )
+                await self.crew.kickoff([status_task])
+            except Exception as e:
+                self.logger.error(f"Error in monitoring loop: {e}")
+            
+            await asyncio.sleep(60)  # Check every minute
