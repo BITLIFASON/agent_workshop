@@ -1,5 +1,4 @@
 import asyncio
-import signal
 from loguru import logger
 from agents.trading_system import TradingSystem
 from agents.utils.config import load_config
@@ -19,14 +18,14 @@ async def main():
         await trading_system.initialize()
         
         # Run the system
-        await trading_system.run()
+        await trading_system.start()
         
     except Exception as e:
         logger.error(f"Error in main: {e}")
         raise
     finally:
         if 'trading_system' in locals():
-            await trading_system.cleanup()
+            await trading_system.shutdown()
 
 if __name__ == "__main__":
     try:

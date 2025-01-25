@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from loguru import logger
 from abc import ABC, abstractmethod
-from utils.llm_providers import LLMProvider, LLMFactory
+from .utils.llm_providers import LLMProvider, LLMFactory
 
 class AgentState(BaseModel):
     """Base state model for agents"""

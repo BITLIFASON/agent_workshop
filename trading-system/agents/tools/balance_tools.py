@@ -1,12 +1,10 @@
 from typing import Dict, Optional, Any
 import asyncpg
-from .base_tools import BaseTool, ToolResult
+from .base_tools import ToolResult
 from pybit.unified_trading import HTTP
 import aiohttp
 from loguru import logger
-from datetime import datetime
 from langchain.tools import BaseTool
-from pydantic import BaseModel
 
 class DatabaseTool(BaseTool):
     def __init__(self, db_config: Dict[str, str]):

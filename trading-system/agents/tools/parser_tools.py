@@ -1,8 +1,6 @@
 from typing import Dict, Any, Optional
 from datetime import datetime
-import os
 import re
-from .base_tools import BaseTool, ToolResult
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from langchain.tools import BaseTool

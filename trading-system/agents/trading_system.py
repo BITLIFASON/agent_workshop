@@ -10,11 +10,6 @@ class TradingSystem:
     def __init__(self, config: Dict[str, Any]):
         """Initialize trading system with configuration"""
         self.config = config
-        self.openai_api_key = config.get("openai_api_key") or os.getenv("OPENAI_API_KEY")
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key is required")
-
-        # Create agents (without initialization)
         self._create_agents()
 
     def _create_agents(self):
@@ -24,7 +19,7 @@ class TradingSystem:
             self.trading_agent = TradingAgent(
                 name="trading_executor",
                 bybit_config=self.config["bybit"],
-                openai_api_key=self.openai_api_key
+                llm_config=self.config["llm"]
             )
 
             # Create Balance Control Agent
@@ -36,7 +31,7 @@ class TradingSystem:
                     "bybit": self.config["bybit"]
                 },
                 trading_callback=self.trading_agent.execute_trade,
-                openai_api_key=self.openai_api_key
+                llm_config=self.config["llm"]
             )
 
             # Create Parser Agent
@@ -47,7 +42,7 @@ class TradingSystem:
                 api_session_token=self.config["telegram"]["session_token"],
                 channel_url=self.config["telegram"]["channel_url"],
                 message_callback=self.process_signal,
-                openai_api_key=self.openai_api_key
+                llm_config=self.config["llm"]
             )
 
         except Exception as e:
@@ -58,16 +53,7 @@ class TradingSystem:
         """Process trading signal through the system"""
         try:
             logger.info(f"Processing signal: {signal_data}")
-            
-            # Validate trade through balance control
-            is_valid = await self.balance_control_agent.validate_trade(signal_data)
-            
-            if is_valid:
-                logger.info("Signal validated, proceeding with execution")
-                await self.balance_control_agent.process_signal(signal_data)
-            else:
-                logger.warning("Signal validation failed")
-
+            await self.balance_control_agent.process_signal(signal_data)
         except Exception as e:
             logger.error(f"Error processing signal: {e}")
 
@@ -137,3 +123,4 @@ class TradingSystem:
 
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
+            raise
