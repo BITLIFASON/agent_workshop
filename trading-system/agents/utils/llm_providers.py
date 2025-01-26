@@ -38,13 +38,8 @@ class BaseLLMProvider(ABC):
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI LLM provider"""
     
-    AVAILABLE_MODELS = ["gpt-4", "gpt-4-turbo-preview", "gpt-3.5-turbo"]
-    
     def __init__(self, api_key: str, model: str = "gpt-4"):
         self.api_key = api_key
-        if model not in self.AVAILABLE_MODELS:
-            logger.warning(f"Model {model} not in available models {self.AVAILABLE_MODELS}, using default gpt-4")
-            model = "gpt-4"
         self.model = model
         
     async def initialize(self) -> bool:
@@ -79,13 +74,8 @@ class OpenAIProvider(BaseLLMProvider):
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic LLM provider"""
     
-    AVAILABLE_MODELS = ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240229"]
-    
     def __init__(self, api_key: str, model: str = "claude-3-opus-20240229"):
         self.api_key = api_key
-        if model not in self.AVAILABLE_MODELS:
-            logger.warning(f"Model {model} not in available models {self.AVAILABLE_MODELS}, using default claude-3-opus")
-            model = "claude-3-opus-20240229"
         self.model = model
         self.client = None
         
@@ -115,13 +105,8 @@ class AnthropicProvider(BaseLLMProvider):
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini LLM provider"""
     
-    AVAILABLE_MODELS = ["gemini-pro", "gemini-pro-vision"]
-    
     def __init__(self, api_key: str, model: str = "gemini-pro"):
         self.api_key = api_key
-        if model not in self.AVAILABLE_MODELS:
-            logger.warning(f"Model {model} not in available models {self.AVAILABLE_MODELS}, using default gemini-pro")
-            model = "gemini-pro"
         self.model = model
         self.client = None
         
@@ -152,13 +137,8 @@ class GeminiProvider(BaseLLMProvider):
 class MistralProvider(BaseLLMProvider):
     """Mistral AI LLM provider"""
     
-    AVAILABLE_MODELS = ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest"]
-    
     def __init__(self, api_key: str, model: str = "mistral-large-latest"):
         self.api_key = api_key
-        if model not in self.AVAILABLE_MODELS:
-            logger.warning(f"Model {model} not in available models {self.AVAILABLE_MODELS}, using default mistral-large")
-            model = "mistral-large-latest"
         self.model = model
         self.client = None
         

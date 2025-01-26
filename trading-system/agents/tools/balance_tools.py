@@ -1,24 +1,49 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Any, Optional, Type, List, Union, Annotated
 import asyncpg
 from .base_tools import ToolResult
 from pybit.unified_trading import HTTP
 import aiohttp
 from loguru import logger
-from langchain.tools import BaseTool
+from pydantic import BaseModel, Field, ConfigDict
+from crewai.tools import BaseTool
+from .trading_tools import CoinInfo
+
+
+class DatabaseConfig(BaseModel):
+    """Database configuration model"""
+    host: str = Field(..., description="Database host")
+    port: str = Field(..., description="Database port")
+    user: str = Field(..., description="Database user")
+    password: str = Field(..., description="Database password")
+    database: str = Field(..., description="Database name")
+    extra_params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DatabaseOperationInput(BaseModel):
+    """Input schema for DatabaseTool"""
+    operation: str = Field(..., description="Operation to perform")
+    args: List[Any] = Field(default_factory=list)
+    params: Dict[str, Any] = Field(default_factory=dict)
+
 
 class DatabaseTool(BaseTool):
+    """Tool for database operations with active and history lots"""
+    name: str = "database_tool"
+    description: str = "Tool for database operations with active and history lots"
+    args_schema: Type[BaseModel] = DatabaseOperationInput
+    db_config: Optional[DatabaseConfig] = Field(default=None)
+    pool: Optional[asyncpg.Pool] = Field(default=None)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     def __init__(self, db_config: Dict[str, str]):
-        super().__init__(
-            name="database_tool",
-            description="Tool for database operations with active and history lots"
-        )
-        self.db_config = db_config
-        self.pool: Optional[asyncpg.Pool] = None
+        super().__init__(name=self.name, description=self.description)
+        self.db_config = DatabaseConfig(**db_config)
+        self.pool = None
 
     async def _create_tables(self, conn) -> bool:
         """Create necessary database tables if they don't exist"""
         try:
-            # Create active_lots table
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS active_lots (
                     id SERIAL PRIMARY KEY,
@@ -29,7 +54,6 @@ class DatabaseTool(BaseTool):
                 )
             """)
 
-            # Create history_lots table
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS history_lots (
                     id SERIAL PRIMARY KEY,
@@ -51,9 +75,8 @@ class DatabaseTool(BaseTool):
     async def initialize(self) -> ToolResult:
         """Initialize database connection and create tables if they don't exist"""
         try:
-            self.pool = await asyncpg.create_pool(**self.db_config)
+            self.pool = await asyncpg.create_pool(**self.db_config.model_dump(exclude={'extra_params'}))
             
-            # Create tables
             async with self.pool.acquire() as conn:
                 if not await self._create_tables(conn):
                     return ToolResult(success=False, error="Failed to create tables")
@@ -65,69 +88,106 @@ class DatabaseTool(BaseTool):
             logger.error(f"Failed to initialize database connection: {e}")
             return ToolResult(success=False, error=str(e))
 
-    async def execute(self, operation: str, *args) -> ToolResult:
+    def _run(self, operation: str, args: List[Any], params: Dict[str, Any]) -> ToolResult:
+        """Synchronous version not supported"""
+        raise NotImplementedError("This tool only supports async operation")
+
+    async def _arun(self, operation: str, args: List[Any], params: Dict[str, Any]) -> ToolResult:
+        """Execute database operations asynchronously"""
         if not self.pool:
             return ToolResult(success=False, error="Database pool not initialized")
 
         try:
             async with self.pool.acquire() as conn:
                 if operation == "get_active_lots":
-                    result = await conn.fetch("""
-                        SELECT * FROM active_lots 
-                        WHERE symbol = $1
-                    """, args[0] if args else None)
-                    return ToolResult(success=True, data=result)
-
+                    return await self._get_active_lots(conn, args)
                 elif operation == "create_lot":
-                    symbol, qty, price = args
-                    await conn.execute("""
-                        INSERT INTO active_lots (symbol, qty, price) 
-                        VALUES ($1, $2, $3)
-                    """, symbol, qty, price)
-                    return ToolResult(success=True)
-
+                    return await self._create_lot(conn, args)
                 elif operation == "delete_lot":
-                    symbol = args[0]
-                    await conn.execute("""
-                        DELETE FROM active_lots 
-                        WHERE symbol = $1
-                    """, symbol)
-                    return ToolResult(success=True)
-
+                    return await self._delete_lot(conn, args)
                 elif operation == "create_history_lot":
-                    action, symbol, qty, price = args
-                    await conn.execute("""
-                        INSERT INTO history_lots (action, symbol, qty, price) 
-                        VALUES ($1, $2, $3, $4)
-                    """, action, symbol, qty, price)
-                    return ToolResult(success=True)
-
+                    return await self._create_history_lot(conn, args)
                 return ToolResult(success=False, error="Unknown operation")
 
         except Exception as e:
             logger.error(f"Database error: {e}")
             return ToolResult(success=False, error=str(e))
 
+    async def _get_active_lots(self, conn, args: List[Any]) -> ToolResult:
+        result = await conn.fetch("""
+            SELECT * FROM active_lots 
+            WHERE symbol = $1
+        """, args[0] if args else None)
+        return ToolResult(success=True, data=result)
+
+    async def _create_lot(self, conn, args: List[Any]) -> ToolResult:
+        symbol, qty, price = args
+        await conn.execute("""
+            INSERT INTO active_lots (symbol, qty, price) 
+            VALUES ($1, $2, $3)
+        """, symbol, qty, price)
+        return ToolResult(success=True)
+
+    async def _delete_lot(self, conn, args: List[Any]) -> ToolResult:
+        symbol = args[0]
+        await conn.execute("""
+            DELETE FROM active_lots 
+            WHERE symbol = $1
+        """, symbol)
+        return ToolResult(success=True)
+
+    async def _create_history_lot(self, conn, args: List[Any]) -> ToolResult:
+        action, symbol, qty, price = args
+        await conn.execute("""
+            INSERT INTO history_lots (action, symbol, qty, price) 
+            VALUES ($1, $2, $3, $4)
+        """, action, symbol, qty, price)
+        return ToolResult(success=True)
+
     async def cleanup(self):
-        """Close database connection pool"""
+        """Close database connection"""
         if self.pool:
             await self.pool.close()
             logger.info("Database connection closed")
 
-class ManagementServiceTool(BaseTool):
-    def __init__(self, config: Dict[str, str]):
-        super().__init__(
-            name="management_service",
-            description="Tool for interacting with management service"
-        )
-        self.host = config['host']
-        self.port = config['port']
-        self.token = config['token']
-        self.base_url = f"http://{self.host}:{self.port}"
 
-    async def execute(self, operation: str, **kwargs) -> ToolResult:
+class ManagementServiceConfig(BaseModel):
+    """Management service configuration model"""
+    host: str = Field(..., description="Management service host")
+    port: str = Field(..., description="Management service port")
+    token: str = Field(..., description="Management service API token")
+    extra_params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ManagementServiceInput(BaseModel):
+    """Input schema for ManagementServiceTool"""
+    operation: str = Field(..., description="Operation to perform")
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ManagementServiceTool(BaseTool):
+    """Tool for interacting with management service"""
+    name: str = "management_service"
+    description: str = "Tool for interacting with management service"
+    args_schema: Type[BaseModel] = ManagementServiceInput
+    config: Optional[ManagementServiceConfig] = Field(default=None)
+    base_url: str = Field("")
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __init__(self, config: Dict[str, str]):
+        super().__init__(name=self.name, description=self.description)
+        self.config = ManagementServiceConfig(**config)
+        self.base_url = f"http://{self.config.host}:{self.config.port}"
+
+    def _run(self, operation: str, params: Dict[str, Any]) -> ToolResult:
+        """Synchronous version not supported"""
+        raise NotImplementedError("This tool only supports async operation")
+
+    async def _arun(self, operation: str, params: Dict[str, Any]) -> ToolResult:
+        """Execute management service operations asynchronously"""
         try:
-            params = {"api_key": self.token}
+            params: Dict[str, str] = {"api_key": self.config.token}
 
             if operation == "get_system_status":
                 response = await self._make_request("GET", "/get_system_status", params=params)
@@ -151,29 +211,51 @@ class ManagementServiceTool(BaseTool):
         except Exception as e:
             return ToolResult(success=False, error=str(e))
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs) -> Dict:
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Make HTTP request to management service"""
         async with aiohttp.ClientSession() as session:
             url = f"{self.base_url}{endpoint}"
             async with session.request(method, url, **kwargs) as response:
                 response.raise_for_status()
                 return await response.json()
 
+
+class BybitOperationParams(BaseModel):
+    """Base model for Bybit operation parameters"""
+    symbol: Optional[str] = Field(None, description="Trading pair symbol")
+
+
+class BybitTradingInput(BaseModel):
+    """Input schema for BybitTradingTool"""
+    operation: str = Field(..., description="Operation to perform")
+    params: BybitOperationParams = Field(default_factory=BybitOperationParams)
+
+
 class BybitTradingTool(BaseTool):
+    name: str = "bybit_trading"
+    description: str = "Tool for executing trades on Bybit"
+    args_schema: Type[BaseModel] = BybitTradingInput
+    client: Optional[HTTP] = Field(default=None, description="Bybit HTTP client")
+    logger: Any = Field(default=None, description="Logger instance")
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     def __init__(self, config: Dict[str, str]):
-        super().__init__(
-            name="bybit_trading",
-            description="Tool for executing trades on Bybit"
-        )
+        super().__init__(name=self.name, description=self.description)
         self.client = HTTP(
             testnet=False,
             api_key=config['api_key'],
             api_secret=config['api_secret'],
             demo=config.get('demo_mode', 'True') == 'True'
         )
+        self.logger = logger
 
-    async def execute(self, operation: str, **kwargs) -> ToolResult:
+    def _run(self, operation: str, params: BybitOperationParams) -> ToolResult:
+        """Synchronous version not supported"""
+        raise NotImplementedError("This tool only supports async operation")
+
+    async def _arun(self, operation: str, params: BybitOperationParams) -> ToolResult:
         try:
-
             if operation == "get_wallet_balance":
                 balance_info = self.client.get_wallet_balance(accountType="UNIFIED",
                                                               coin="USDT")["result"]["list"][0]["coin"][0]["walletBalance"]
@@ -181,7 +263,7 @@ class BybitTradingTool(BaseTool):
                 return ToolResult(success=True, data=balance_info)
 
             if operation == "get_coin_balance":
-                symbol = kwargs.get('symbol', '')
+                symbol = params.symbol or ''
                 if symbol[:-4] not in [item['coin'] for item in self.client.get_wallet_balance(accountType="UNIFIED")["result"]["list"][0]['coin']]:
                     return ToolResult(success=True, data=0)
                 symbol_wallet_balance = self.client.get_wallet_balance(accountType="UNIFIED", coin=symbol[:-4])["result"]["list"][0]["coin"][0]["walletBalance"]
@@ -189,21 +271,27 @@ class BybitTradingTool(BaseTool):
                 return ToolResult(success=True, data=symbol_wallet_balance)
 
             if operation == "get_coin_info":
-                symbol = kwargs.get('symbol', '')
+                symbol = params.symbol or ''
                 symbol_qty_info = self.client.get_instruments_info(category="linear",
                                                                    symbol=symbol)["result"]["list"][0]["lotSizeFilter"]
-                max_qty = float(symbol_qty_info.get("maxMktOrderQty"))
-                min_qty = float(symbol_qty_info.get("minOrderQty"))
-                step_qty = symbol_qty_info.get("qtyStep")
-                min_order_usdt = int(symbol_qty_info.get("minNotionalValue"))
-                symbol_info={"max_qty":max_qty,
-                             "min_qty":min_qty,
-                             "step_qty":step_qty,
-                             "min_order_usdt":min_order_usdt}
-                return ToolResult(success=True, data=symbol_info)
+                coin_info = CoinInfo(
+                    max_qty=float(symbol_qty_info.get("maxMktOrderQty")),
+                    min_qty=float(symbol_qty_info.get("minOrderQty")),
+                    step_qty=symbol_qty_info.get("qtyStep"),
+                    min_order_usdt=int(symbol_qty_info.get("minNotionalValue"))
+                )
+                return ToolResult(success=True, data=coin_info.model_dump())
 
             else:
                 return ToolResult(success=False, error="Unknown operation")
 
         except Exception as e:
+            logger.error(f"Trading tool error: {e}")
             return ToolResult(success=False, error=str(e))
+
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        async with aiohttp.ClientSession() as session:
+            url = f"{self.base_url}{endpoint}"
+            async with session.request(method, url, **kwargs) as response:
+                response.raise_for_status()
+                return await response.json()
