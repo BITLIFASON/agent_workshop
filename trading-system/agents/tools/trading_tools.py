@@ -2,7 +2,7 @@ from typing import Any, Type, Optional, Dict, List
 from pybit.unified_trading import HTTP
 from .base_tools import ToolResult
 import logging
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from crewai.tools import BaseTool
 
 logging.basicConfig(
@@ -20,12 +20,34 @@ class CoinInfo(BaseModel):
     extra_params: Dict[str, Any] = Field(default_factory=dict)
 
 
-class TradingOperationSchema(BaseModel):
-    """Input schema for BybitTradingTool"""
+class FixedTradingOperationSchema(BaseModel):
+    """Fixed input schema for BybitTradingTool with predefined symbol"""
     operation: str = Field(..., description="Operation to perform (get_wallet_balance, get_coin_balance, get_coin_info, etc)")
-    symbol: Optional[str] = Field(None, description="Trading pair symbol (e.g., 'BTCUSDT')")
     side: Optional[str] = Field(None, description="Trading side ('buy' or 'sell')")
     qty: Optional[float] = Field(None, description="Order quantity")
+
+
+class TradingOperationSchema(FixedTradingOperationSchema):
+    """Input schema for BybitTradingTool"""
+    symbol: Optional[str] = Field(None, description="Trading pair symbol (e.g., 'BTCUSDT')")
+
+    @validator("symbol")
+    def validate_symbol(cls, v):
+        if v is not None and not v.endswith("USDT"):
+            raise ValueError("Symbol must end with USDT")
+        return v
+
+    @validator("side")
+    def validate_side(cls, v):
+        if v is not None and v.lower() not in ["buy", "sell"]:
+            raise ValueError("Side must be either 'buy' or 'sell'")
+        return v
+
+    @validator("qty")
+    def validate_qty(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return v
 
 
 class OrderResult(BaseModel):
@@ -43,15 +65,32 @@ class BybitTradingTool(BaseTool):
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
     args_schema: Type[BaseModel] = TradingOperationSchema
+    client: Optional[HTTP] = None
+    leverage: str = "1"
 
-    def __init__(self, api_key: str, api_secret: str, demo_mode: bool = True, leverage: str = "1"):
-        super().__init__(name=self.name, description=self.description)
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        demo_mode: bool = True,
+        leverage: str = "1",
+        symbol: Optional[str] = None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
         self.client = HTTP(
             testnet=demo_mode,
             api_key=api_key,
             api_secret=api_secret
         )
         self.leverage = leverage
+
+        if symbol is not None:
+            self.symbol = symbol
+            self.description = f"Tool for executing trades on Bybit for {symbol}"
+            self.args_schema = FixedTradingOperationSchema
+
+        self._generate_description()
 
     def _run(self, **kwargs: Any) -> Any:
         """Synchronous version not supported"""
@@ -60,7 +99,7 @@ class BybitTradingTool(BaseTool):
     async def _arun(self, **kwargs: Any) -> Any:
         """Execute trading operations asynchronously"""
         operation = kwargs.get("operation")
-        symbol = kwargs.get("symbol")
+        symbol = kwargs.get("symbol", getattr(self, "symbol", None))
         side = kwargs.get("side")
         qty = kwargs.get("qty")
 
@@ -171,6 +210,24 @@ class OrderValidatorSchema(BaseModel):
     side: str = Field(..., description="Trading side ('buy' or 'sell')")
     qty: float = Field(..., description="Order quantity")
 
+    @validator("symbol")
+    def validate_symbol(cls, v):
+        if not v.endswith("USDT"):
+            raise ValueError("Symbol must end with USDT")
+        return v
+
+    @validator("side")
+    def validate_side(cls, v):
+        if v.lower() not in ["buy", "sell"]:
+            raise ValueError("Side must be either 'buy' or 'sell'")
+        return v
+
+    @validator("qty")
+    def validate_qty(cls, v):
+        if v <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return v
+
 
 class OrderValidatorTool(BaseTool):
     """Tool for validating trade orders"""
@@ -180,21 +237,8 @@ class OrderValidatorTool(BaseTool):
 
     def _run(self, **kwargs: Any) -> Any:
         try:
-            symbol = kwargs.get("symbol")
-            side = kwargs.get("side")
-            qty = kwargs.get("qty")
-
-            if not symbol.endswith('USDT'):
-                return ToolResult(success=False, error="Invalid symbol format")
-
-            if qty <= 0:
-                return ToolResult(success=False, error="Invalid quantity")
-
-            if side.lower() not in ['buy', 'sell']:
-                return ToolResult(success=False, error="Invalid side")
-
+            # Validation is handled by the schema
             return ToolResult(success=True, data=kwargs)
-
         except Exception as e:
             logger.error(f"Order validation error: {e}")
             return ToolResult(success=False, error=str(e))

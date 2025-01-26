@@ -4,7 +4,7 @@ from .base_tools import ToolResult
 from pybit.unified_trading import HTTP
 import aiohttp
 from loguru import logger
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, validator
 from crewai.tools import BaseTool
 from .trading_tools import CoinInfo
 import logging
@@ -25,13 +25,35 @@ class DatabaseConfig(BaseModel):
     extra_params: Dict[str, Any] = Field(default_factory=dict)
 
 
-class DatabaseOperationSchema(BaseModel):
-    """Input schema for DatabaseTool"""
+class FixedDatabaseOperationSchema(BaseModel):
+    """Fixed input schema for DatabaseTool with predefined symbol"""
     operation: str = Field(..., description="Operation to perform (get_active_lots, create_lot, delete_lot, create_history_lot)")
-    symbol: Optional[str] = Field(None, description="Trading pair symbol")
     qty: Optional[float] = Field(None, description="Order quantity")
     price: Optional[float] = Field(None, description="Order price")
     action: Optional[str] = Field(None, description="Action type (for history lots)")
+
+
+class DatabaseOperationSchema(FixedDatabaseOperationSchema):
+    """Input schema for DatabaseTool"""
+    symbol: Optional[str] = Field(None, description="Trading pair symbol")
+
+    @validator("symbol")
+    def validate_symbol(cls, v):
+        if v is not None and not v.endswith("USDT"):
+            raise ValueError("Symbol must end with USDT")
+        return v
+
+    @validator("qty")
+    def validate_qty(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return v
+
+    @validator("price")
+    def validate_price(cls, v):
+        if v is not None and v <= 0:
+            raise ValueError("Price must be greater than 0")
+        return v
 
 
 class DatabaseTool(BaseTool):
@@ -39,9 +61,19 @@ class DatabaseTool(BaseTool):
     name: str = "database_tool"
     description: str = "Tool for database operations with active and history lots"
     args_schema: Type[BaseModel] = DatabaseOperationSchema
+    pool: Optional[asyncpg.Pool] = None
 
-    def __init__(self, host: str, port: str, user: str, password: str, database: str):
-        super().__init__(name=self.name, description=self.description)
+    def __init__(
+        self,
+        host: str,
+        port: str,
+        user: str,
+        password: str,
+        database: str,
+        symbol: Optional[str] = None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
         self.db_config = {
             "host": host,
             "port": port,
@@ -49,7 +81,13 @@ class DatabaseTool(BaseTool):
             "password": password,
             "database": database
         }
-        self.pool = None
+
+        if symbol is not None:
+            self.symbol = symbol
+            self.description = f"Tool for database operations with active and history lots for {symbol}"
+            self.args_schema = FixedDatabaseOperationSchema
+
+        self._generate_description()
 
     async def _create_tables(self, conn) -> bool:
         """Create necessary database tables if they don't exist"""
@@ -74,28 +112,19 @@ class DatabaseTool(BaseTool):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
-            logger.info("Database tables created successfully")
             return True
-
         except Exception as e:
-            logger.error(f"Error creating tables: {e}")
             return False
 
     async def initialize(self) -> ToolResult:
         """Initialize database connection and create tables if they don't exist"""
         try:
             self.pool = await asyncpg.create_pool(**self.db_config)
-            
             async with self.pool.acquire() as conn:
                 if not await self._create_tables(conn):
                     return ToolResult(success=False, error="Failed to create tables")
-            
-            logger.info("Database connection and tables initialized successfully")
             return ToolResult(success=True)
-
         except Exception as e:
-            logger.error(f"Failed to initialize database connection: {e}")
             return ToolResult(success=False, error=str(e))
 
     def _run(self, **kwargs: Any) -> Any:
@@ -108,7 +137,7 @@ class DatabaseTool(BaseTool):
             return ToolResult(success=False, error="Database pool not initialized")
 
         operation = kwargs.get("operation")
-        symbol = kwargs.get("symbol")
+        symbol = kwargs.get("symbol", getattr(self, "symbol", None))
         qty = kwargs.get("qty")
         price = kwargs.get("price")
         action = kwargs.get("action")
@@ -124,9 +153,7 @@ class DatabaseTool(BaseTool):
                 elif operation == "create_history_lot":
                     return await self._create_history_lot(conn, action, symbol, qty, price)
                 return ToolResult(success=False, error="Unknown operation")
-
         except Exception as e:
-            logger.error(f"Database error: {e}")
             return ToolResult(success=False, error=str(e))
 
     async def _get_active_lots(self, conn, symbol: str) -> ToolResult:
@@ -161,7 +188,6 @@ class DatabaseTool(BaseTool):
         """Close database connection"""
         if self.pool:
             await self.pool.close()
-            logger.info("Database connection closed")
 
 
 class ManagementServiceConfig(BaseModel):
@@ -172,9 +198,14 @@ class ManagementServiceConfig(BaseModel):
     extra_params: Dict[str, Any] = Field(default_factory=dict)
 
 
-class ManagementServiceSchema(BaseModel):
-    """Input schema for ManagementServiceTool"""
+class FixedManagementServiceSchema(BaseModel):
+    """Fixed input schema for ManagementServiceTool"""
     operation: str = Field(..., description="Operation to perform (get_system_status, get_price_limit, get_fake_balance, get_num_available_lots)")
+
+
+class ManagementServiceSchema(FixedManagementServiceSchema):
+    """Input schema for ManagementServiceTool"""
+    pass
 
 
 class ManagementServiceTool(BaseTool):
@@ -183,10 +214,17 @@ class ManagementServiceTool(BaseTool):
     description: str = "Tool for interacting with management service"
     args_schema: Type[BaseModel] = ManagementServiceSchema
 
-    def __init__(self, host: str, port: str, token: str):
-        super().__init__(name=self.name, description=self.description)
+    def __init__(
+        self,
+        host: str,
+        port: str,
+        token: str,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
         self.base_url = f"http://{host}:{port}"
         self.token = token
+        self._generate_description()
 
     def _run(self, **kwargs: Any) -> Any:
         """Synchronous version not supported"""
@@ -218,10 +256,9 @@ class ManagementServiceTool(BaseTool):
                 return ToolResult(success=False, error="Unknown operation")
 
         except Exception as e:
-            logger.error(f"Management service error: {e}")
             return ToolResult(success=False, error=str(e))
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> dict:
         """Make HTTP request to management service"""
         async with aiohttp.ClientSession() as session:
             url = f"{self.base_url}{endpoint}"
