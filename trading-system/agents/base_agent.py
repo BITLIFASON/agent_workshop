@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from crewai import Agent
 from loguru import logger
 from crewai.tools import BaseTool
+from .utils.llm_providers import LLMProvider, LLMFactory
 
 
 class BaseAgent:
@@ -24,13 +25,19 @@ class BaseAgent:
         self.llm_config = llm_config or {}
         self.tools = tools or []
 
+        # Initialize LLM provider
+        provider_type = LLMProvider(self.llm_config.get("provider", "openai"))
+        self.llm_provider = LLMFactory.create_provider(provider_type, self.llm_config)
+        if not self.llm_provider:
+            raise ValueError(f"Failed to create LLM provider: {provider_type}")
+
         # Create CrewAI agent
         self.agent = Agent(
             name=name,
             role=role,
             goal=goal,
             backstory=backstory,
-            llm_config=self.llm_config,
+            llm=self.llm_provider.get_crew_llm(temperature=self.llm_config.get("temperature", 0.7)),
             tools=self.tools,
             verbose=True
         )
@@ -48,6 +55,9 @@ class BaseAgent:
         """Initialize agent"""
         try:
             logger.info(f"Initializing agent {self.name}")
+            if not await self.llm_provider.initialize():
+                logger.error("Failed to initialize LLM provider")
+                return False
             return True
         except Exception as e:
             logger.error(f"Error initializing agent {self.name}: {e}")

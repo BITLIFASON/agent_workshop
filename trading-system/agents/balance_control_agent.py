@@ -65,8 +65,6 @@ class BalanceControlAgent(BaseAgent):
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
-        llm = self.llm_provider.get_crew_llm(temperature=0.7)
-
         self.system_monitor = Agent(
             role="System Monitor",
             goal="Monitor system status and validate trading conditions",
@@ -76,7 +74,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.management_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
         self.trade_analyzer = Agent(
@@ -88,7 +86,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.trading_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
         self.db_manager = Agent(
@@ -99,7 +97,7 @@ class BalanceControlAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.db_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
         self.crew = Crew(

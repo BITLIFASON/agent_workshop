@@ -40,8 +40,6 @@ class TradingAgent(BaseAgent):
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
-        llm = self.llm_provider.get_crew_llm(temperature=0.7)
-
         self.trade_executor = Agent(
             role="Trade Executor",
             goal="Execute trades accurately and efficiently",
@@ -50,7 +48,7 @@ class TradingAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.trading_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
     async def execute_trade(self, signal_data: Dict[str, Any]) -> bool:

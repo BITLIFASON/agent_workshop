@@ -49,8 +49,6 @@ class ParserAgent(BaseAgent):
 
     def _setup_crew(self):
         """Setup Crew AI agents and tasks"""
-        llm = self.llm_provider.get_crew_llm(temperature=0.7)
-        
         self.signal_parser = Agent(
             role="Signal Parser",
             goal="Extract accurate trading signals from messages",
@@ -59,7 +57,7 @@ class ParserAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.parser_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
         self.signal_validator = Agent(
@@ -70,7 +68,7 @@ class ParserAgent(BaseAgent):
             verbose=True,
             allow_delegation=False,
             tools=[self.parser_tool],
-            llm=llm
+            llm=self.llm_provider.get_crew_llm(temperature=0.7)
         )
 
         self.crew = Crew(
