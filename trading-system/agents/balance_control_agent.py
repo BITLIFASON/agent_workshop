@@ -22,6 +22,11 @@ class BalanceControlAgent(BaseAgent):
         """Initialize BalanceControlAgent"""
         super().__init__(
             name=name,
+            role="Balance Controller",
+            goal="Control trading balance and manage lots",
+            backstory="""You are a balance controller responsible for managing trading balance
+            and lots. You ensure trades comply with system limits, monitor fake balance,
+            and maintain proper lot allocation.""",
             llm_config=llm_config or {}
         )
 

@@ -18,6 +18,11 @@ class TradingAgent(BaseAgent):
         """Initialize TradingAgent"""
         super().__init__(
             name=name,
+            role="Trading Executor",
+            goal="Execute trades on exchange accurately and efficiently",
+            backstory="""You are a trading executor responsible for placing and managing orders
+            on the Bybit exchange. You ensure trades are executed with proper parameters and
+            monitor their execution status.""",
             llm_config=llm_config or {}
         )
 

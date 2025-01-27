@@ -15,6 +15,7 @@ class BaseAgent(Agent):
         """Initialize base agent"""
         super().__init__(
             name=name,
+            role=name,  # Use name as role by default
             goal="Base agent goal",
             backstory="Base agent backstory",
             llm_config=llm_config or {},

@@ -23,8 +23,12 @@ class ParserAgent(BaseAgent):
         """Initialize ParserAgent"""
         super().__init__(
             name=name,
-            llm_config=llm_config or {},
-            system_message="You are a trading signal parser agent"
+            role="Signal Parser",
+            goal="Parse and validate trading signals",
+            backstory="""You are a signal parser responsible for monitoring Telegram channels,
+            extracting trading signals, and validating their format and content. You ensure
+            signals are properly formatted and contain all required information.""",
+            llm_config=llm_config or {}
         )
 
         # Initialize tools
