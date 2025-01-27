@@ -33,15 +33,23 @@ class BalanceControlAgent(BaseAgent):
 
         # Initialize tools
         self.management_tool = ManagementServiceTool(
-            config=config["management_api"]
+            host=config['management_api']['host'],
+            port=config['management_api']['port'],
+            token=config['management_api']['token']
         )
 
         self.db_tool = DatabaseTool(
-            config=config["database"]
+            host=config['database']['host'],
+            port=config['database']['port'],
+            user=config['database']['user'],
+            password=config['database']['password'],
+            database=config['database']['database']
         )
 
         self.trading_tool = BybitTradingTool(
-            config=config["bybit"]
+            api_key=config['bybit']['api_key'],
+            api_secret=config['bybit']['api_secret'],
+            demo_mode=config['bybit'].get('demo_mode', True)
         )
 
         self.tools = [
