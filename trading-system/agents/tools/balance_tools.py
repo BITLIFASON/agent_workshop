@@ -95,15 +95,26 @@ class DatabaseTool(BaseTool):
     """Tool for database operations"""
     name: str = "database"
     description: str = "Tool for database operations"
-    config: DatabaseConfig = Field(..., description="Database configuration")
     pool: Optional[asyncpg.Pool] = Field(default=None, description="Database connection pool")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, config: Dict[str, str], **kwargs):
+    def __init__(
+        self,
+        host: str,
+        port: str,
+        user: str,
+        password: str,
+        database: str,
+        **kwargs
+    ):
         """Initialize DatabaseTool"""
         super().__init__(**kwargs)
-        self.config = DatabaseConfig(**config)
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
         self.pool = None
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
@@ -114,11 +125,11 @@ class DatabaseTool(BaseTool):
         """Run database operation"""
         if not self.pool:
             self.pool = await asyncpg.create_pool(
-                host=self.config.host,
-                port=self.config.port,
-                user=self.config.user,
-                password=self.config.password,
-                database=self.config.database
+                host=self.host,
+                port=self.port,
+                user=self.user,
+                password=self.password,
+                database=self.database
             )
 
         try:
@@ -232,15 +243,22 @@ class ManagementServiceTool(BaseTool):
     """Tool for interacting with Management Service"""
     name: str = "management_service"
     description: str = "Tool for interacting with Management Service"
-    config: ManagementServiceConfig = Field(..., description="Management service configuration")
     session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, config: Dict[str, str], **kwargs):
+    def __init__(
+        self,
+        host: str,
+        port: str,
+        token: str,
+        **kwargs
+    ):
         """Initialize ManagementServiceTool"""
         super().__init__(**kwargs)
-        self.config = ManagementServiceConfig(**config)
+        self.host = host
+        self.port = port
+        self.token = token
         self.session = None
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
@@ -251,8 +269,8 @@ class ManagementServiceTool(BaseTool):
         """Run management service operation"""
         if not self.session:
             self.session = aiohttp.ClientSession(
-                base_url=f"http://{self.config.host}:{self.config.port}",
-                headers={"Authorization": f"Bearer {self.config.token}"}
+                base_url=f"http://{self.host}:{self.port}",
+                headers={"Authorization": f"Bearer {self.token}"}
             )
 
         try:

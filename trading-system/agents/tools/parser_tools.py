@@ -166,25 +166,22 @@ class TelegramListenerTool(BaseTool):
 
     def __init__(
         self,
-        api_id: Optional[int] = None,
-        api_hash: Optional[str] = None,
-        session_token: Optional[str] = None,
-        channel_url: Optional[str] = None,
+        api_id: int,
+        api_hash: str,
+        session_token: str,
+        channel_url: str,
         message_callback: Optional[Callable] = None,
         **kwargs
     ):
         """Initialize TelegramListenerTool"""
         super().__init__(**kwargs)
-        self.channel_url = channel_url if channel_url else ""
+        self.channel_url = channel_url
         self.message_callback = message_callback
-        if api_id and api_hash and session_token:
-            self.client = TelegramClient(
-                session_token,
-                api_id,
-                api_hash
-            )
-        else:
-            self.client = None
+        self.client = TelegramClient(
+            session_token,
+            api_id,
+            api_hash
+        )
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
         """Synchronous version not supported"""

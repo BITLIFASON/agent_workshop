@@ -1,7 +1,7 @@
 from typing import Any, Type, Optional, Dict, List
 from pybit.unified_trading import HTTP
 from loguru import logger
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 
 class CoinInfo(BaseModel):
@@ -122,9 +122,8 @@ class BybitTradingTool(BaseTool):
     """Tool for executing trades on Bybit exchange"""
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
-    args_schema: Type[BaseModel] = TradingOperationInput
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
-    leverage: str = Field(default="1", description="Trading leverage")
+    logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -133,7 +132,6 @@ class BybitTradingTool(BaseTool):
         api_key: str,
         api_secret: str,
         demo_mode: bool = True,
-        leverage: str = "1",
         **kwargs
     ):
         """Initialize BybitTradingTool"""
@@ -143,7 +141,7 @@ class BybitTradingTool(BaseTool):
             api_key=api_key,
             api_secret=api_secret
         )
-        self.leverage = leverage
+        self.logger = logger
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
         """Synchronous version not supported"""
