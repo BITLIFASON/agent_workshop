@@ -1,33 +1,31 @@
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional
 import asyncio
-from crewai import Agent, Task, Crew
+from loguru import logger
+from crewai import Agent
 from .base_agent import BaseAgent
-from .tools.trading_tools import BybitTradingTool, TradingOperationInput
+from .tools.trading_tools import BybitTradingTool
+
 
 class TradingAgent(BaseAgent):
+    """Agent for executing trades on exchange"""
+
     def __init__(
         self,
         name: str,
-        bybit_config: Dict[str, str],
-        llm_config: Dict[str, Any],
-        execution_callback: Optional[Callable] = None
+        bybit_config: Dict[str, Any],
+        llm_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize TradingAgent"""
-        super().__init__(name, llm_config)
-
-        # Initialize tools
-        self.trading_tool = BybitTradingTool(
-            api_key=bybit_config['api_key'],
-            api_secret=bybit_config['api_secret'],
-            demo_mode=bybit_config.get('demo_mode', True)
+        super().__init__(
+            name=name,
+            llm_config=llm_config or {}
         )
 
-        # Add tools to agent
-        self.add_tool(self.trading_tool)
-
-        self.execution_callback = execution_callback
-        self.retry_attempts = 3
-        self.retry_delay = 1  # seconds
+        # Initialize trading tool
+        self.trading_tool = BybitTradingTool(
+            config=bybit_config
+        )
+        self.tools = [self.trading_tool]
 
         # Initialize Crew AI components
         self._setup_crew()
@@ -36,146 +34,76 @@ class TradingAgent(BaseAgent):
         """Setup Crew AI agents and tasks"""
         llm = self.llm_provider.get_crew_llm(temperature=0.7)
 
-        self.market_analyst = Agent(
-            role="Market Analyst",
-            goal="Analyze market conditions and validate order parameters",
-            backstory="""You are a market analysis expert who evaluates trading conditions
-            and validates order parameters. You ensure trades meet all requirements and 
-            market conditions are suitable for execution.""",
+        self.trade_executor = Agent(
+            role="Trade Executor",
+            goal="Execute trades accurately and efficiently",
+            backstory="""You are responsible for executing trades on the exchange.
+            You ensure trades are executed with proper parameters and monitor their status.""",
             verbose=True,
             allow_delegation=False,
             tools=[self.trading_tool],
             llm=llm
         )
 
-        self.order_executor = Agent(
-            role="Order Executor",
-            goal="Execute and manage trading orders",
-            backstory="""You are responsible for executing trades with proper
-            parameters, managing order status, and handling execution issues.
-            You ensure orders are placed correctly and monitor their execution.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.trading_tool],
-            llm=llm
-        )
-
-        self.crew = Crew(
-            agents=[self.market_analyst, self.order_executor],
-            tasks=[],
-            verbose=True
-        )
-
-    async def execute_trade(self, trade_signal: Dict[str, Any]):
-        """Execute a trade based on the signal"""
+    async def execute_trade(self, signal_data: Dict[str, Any]) -> bool:
+        """Execute trade based on signal"""
         try:
-            if not self.state.is_active:
-                self.logger.error("Agent not initialized")
-                return
+            logger.info(f"Executing trade in {self.name}: {signal_data}")
 
-            # Get current market price
-            price_check = await self.trading_tool._arun(
-                operation="get_market_price",
-                symbol=trade_signal["symbol"]
+            # Get coin info
+            coin_info = await self.trading_tool._arun(
+                operation="get_coin_info",
+                params={"symbol": signal_data["symbol"]}
             )
-            if not price_check["success"]:
-                self.logger.error(f"Failed to get market price: {price_check['error']}")
-                return
-
-            current_price = price_check["data"]
-            signal_price = trade_signal["price"]
-
-            # Check if price hasn't moved too much (1% tolerance)
-            price_diff_percent = abs(current_price - signal_price) / signal_price * 100
-            if price_diff_percent > 1:
-                self.logger.warning(
-                    f"Price moved too much. Signal: {signal_price}, Current: {current_price}, "
-                    f"Difference: {price_diff_percent:.2f}%"
-                )
-                return
-
-            # Execute order with retry mechanism
-            order_data = {
-                "operation": "place_order",
-                "symbol": trade_signal["symbol"],
-                "side": trade_signal["action"].capitalize(),
-                "qty": trade_signal["qty"]
-            }
-            execution_result = await self._execute_order_with_retry(order_data)
-            
-            if not execution_result["success"]:
-                self.logger.error(f"Order execution failed: {execution_result['error']}")
-                return
-
-            # Update state and notify
-            self.state.last_action = f"Executed {order_data['side']} order for {order_data['symbol']}"
-            if self.execution_callback:
-                await self.execution_callback({
-                    "status": "success",
-                    "order": order_data,
-                    "result": execution_result["data"],
-                    "price": current_price
-                })
-
-        except Exception as e:
-            self.logger.error(f"Error executing trade: {e}")
-            self.state.last_error = str(e)
-
-    async def _execute_order_with_retry(self, order_data: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
-        """Execute order with retry mechanism"""
-        retries = 0
-        while retries < max_retries:
-            try:
-                result = await self.trading_tool._arun(**order_data)
-                if result["success"]:
-                    return result
-                
-                retries += 1
-                if retries < max_retries:
-                    self.logger.warning(f"Retry {retries}/{max_retries}: {result['error']}")
-                    await asyncio.sleep(self.retry_delay)
-                else:
-                    return {"success": False, "error": f"Max retries reached: {result['error']}"}
-                    
-            except Exception as e:
-                retries += 1
-                if retries < max_retries:
-                    self.logger.warning(f"Retry {retries}/{max_retries} after error: {e}")
-                    await asyncio.sleep(self.retry_delay)
-                else:
-                    return {"success": False, "error": str(e)}
-
-    async def initialize(self):
-        """Initialize the trading agent"""
-        if not await super().initialize():
-            return False
-
-        self.logger.info("Initializing Trading Agent...")
-
-        try:
-            # Verify exchange connection
-            balance = await self.trading_tool._arun(operation="get_wallet_balance")
-            if not balance["success"]:
-                self.logger.error(f"Failed to connect to exchange: {balance['error']}")
+            if coin_info["status"] != "success":
+                logger.error(f"Failed to get coin info: {coin_info}")
                 return False
 
-            self.state.is_active = True
+            # Execute trade
+            trade_result = await self.trading_tool._arun(
+                operation="execute_trade",
+                params={
+                    "symbol": signal_data["symbol"],
+                    "side": signal_data["action"],
+                    "qty": signal_data["qty"],
+                    "price": signal_data["price"]
+                }
+            )
+            if trade_result["status"] != "success":
+                logger.error(f"Failed to execute trade: {trade_result}")
+                return False
+
+            logger.info(f"Trade executed successfully: {trade_result}")
             return True
 
         except Exception as e:
-            self.logger.error(f"Initialization error: {e}")
+            logger.error(f"Error executing trade in {self.name}: {e}")
+            return False
+
+    async def initialize(self) -> bool:
+        """Initialize agent and its tools"""
+        try:
+            logger.info(f"Initializing {self.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing {self.name}: {e}")
             return False
 
     async def run(self):
         """Main execution loop"""
-        self.logger.info("Trading Agent running...")
-        while self.state.is_active:
-            try:
+        try:
+            logger.info(f"Starting {self.name}")
+            while True:
                 await asyncio.sleep(1)  # Prevent CPU overload
-            except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
+        except Exception as e:
+            logger.error(f"Error in {self.name}: {e}")
+            raise
 
     async def cleanup(self):
-        """Cleanup resources"""
-        self.state.is_active = False
-        self.logger.info(f"Agent {self.name} cleaned up")
+        """Cleanup agent resources"""
+        try:
+            logger.info(f"Cleaning up {self.name}")
+            await self.trading_tool.cleanup()
+        except Exception as e:
+            logger.error(f"Error cleaning up {self.name}: {e}")
+            raise

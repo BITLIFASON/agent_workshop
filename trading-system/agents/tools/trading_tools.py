@@ -123,7 +123,7 @@ class BybitTradingTool(BaseTool):
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
     args_schema: Type[BaseModel] = TradingOperationInput
-    client: Optional[HTTP] = Field(default=None, description="Bybit HTTP client")
+    client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     leverage: str = Field(default="1", description="Trading leverage")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

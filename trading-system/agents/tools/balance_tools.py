@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConfig(BaseModel):
-    """Database configuration model"""
+    """Configuration for Database"""
     host: str = Field(..., description="Database host")
     port: str = Field(..., description="Database port")
     user: str = Field(..., description="Database user")
@@ -92,181 +92,115 @@ class DatabaseOperationInput(BaseModel):
 
 
 class DatabaseTool(BaseTool):
-    """Tool for database operations with active and history lots"""
-    name: str = "database_tool"
-    description: str = "Tool for database operations with active and history lots"
-    args_schema: Type[BaseModel] = DatabaseOperationInput
-    pool: Optional[asyncpg.Pool] = None
+    """Tool for database operations"""
+    name: str = "database"
+    description: str = "Tool for database operations"
+    config: DatabaseConfig = Field(..., description="Database configuration")
+    pool: Optional[asyncpg.Pool] = Field(default=None, description="Database connection pool")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(
-        self,
-        host: str,
-        port: str,
-        user: str,
-        password: str,
-        database: str,
-        **kwargs
-    ):
+    def __init__(self, config: Dict[str, str], **kwargs):
         """Initialize DatabaseTool"""
         super().__init__(**kwargs)
-        self.db_config = DatabaseConfig(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-            database=database
-        ).model_dump()
-
-    async def _create_tables(self, conn) -> bool:
-        """Create necessary database tables if they don't exist"""
-        try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS active_lots (
-                    id SERIAL PRIMARY KEY,
-                    symbol VARCHAR(50) NOT NULL,
-                    qty NUMERIC(20, 8) NOT NULL,
-                    price NUMERIC(20, 8) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS history_lots (
-                    id SERIAL PRIMARY KEY,
-                    action VARCHAR(50) NOT NULL,
-                    symbol VARCHAR(50) NOT NULL,
-                    qty NUMERIC(20, 8) NOT NULL,
-                    price NUMERIC(20, 8) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to create tables: {e}")
-            return False
-
-    async def initialize(self) -> Dict[str, Any]:
-        """Initialize database connection and create tables"""
-        try:
-            self.pool = await asyncpg.create_pool(**self.db_config)
-            async with self.pool.acquire() as conn:
-                if not await self._create_tables(conn):
-                    return {"success": False, "error": "Failed to create tables"}
-            return {"success": True}
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
-            return {"success": False, "error": str(e)}
+        self.config = DatabaseConfig(**config)
+        self.pool = None
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
         """Synchronous version not supported"""
         raise NotImplementedError("This tool only supports async operation")
 
-    async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
-        """Execute database operations asynchronously"""
+    async def _arun(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
+        """Run database operation"""
         if not self.pool:
-            return {"success": False, "error": "Database pool not initialized"}
+            self.pool = await asyncpg.create_pool(
+                host=self.config.host,
+                port=self.config.port,
+                user=self.config.user,
+                password=self.config.password,
+                database=self.config.database
+            )
 
         try:
-            operation = kwargs.get("operation")
-            symbol = kwargs.get("symbol")
-            qty = kwargs.get("qty")
-            price = kwargs.get("price")
-            action = kwargs.get("action")
-
-            if not symbol and operation not in ["get_all_active_lots"]:
-                return {"success": False, "error": "Symbol is required for this operation"}
-
-            async with self.pool.acquire() as conn:
-                if operation == "get_active_lots":
-                    return await self._get_active_lots(conn, symbol)
-                elif operation == "create_lot":
-                    if not all([qty, price]):
-                        return {"success": False, "error": "Quantity and price are required for creating lots"}
-                    return await self._create_lot(conn, symbol, qty, price)
-                elif operation == "delete_lot":
-                    return await self._delete_lot(conn, symbol)
-                elif operation == "create_history_lot":
-                    if not all([action, qty, price]):
-                        return {"success": False, "error": "Action, quantity and price are required for creating history lots"}
-                    return await self._create_history_lot(conn, action, symbol, qty, price)
-                return {"success": False, "error": "Unknown operation"}
+            if operation == "create_lot":
+                return await self._create_lot(**kwargs)
+            elif operation == "get_active_lots":
+                return await self._get_active_lots(**kwargs)
+            elif operation == "delete_lot":
+                return await self._delete_lot(**kwargs)
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
 
         except Exception as e:
-            logger.error(f"Database operation error: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error in database operation: {e}")
+            return {"status": "error", "message": str(e)}
 
-    async def _get_active_lots(self, conn, symbol: str) -> Dict[str, Any]:
+    async def _create_lot(self, symbol: str, qty: float, price: float) -> Dict[str, Any]:
+        """Create new lot record"""
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO lots (symbol, qty, price, created_at)
+                    VALUES ($1, $2, $3, NOW())
+                    """,
+                    symbol, qty, price
+                )
+                return {"status": "success"}
+        except Exception as e:
+            logger.error(f"Error creating lot: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def _get_active_lots(self, symbol: str) -> Dict[str, Any]:
         """Get active lots for symbol"""
         try:
-            result = await conn.fetch("""
-                SELECT * FROM active_lots 
-                WHERE symbol = $1
-            """, symbol)
-            return {"success": True, "data": result}
+            async with self.pool.acquire() as conn:
+                lots = await conn.fetch(
+                    """
+                    SELECT * FROM lots
+                    WHERE symbol = $1
+                    ORDER BY created_at ASC
+                    """,
+                    symbol
+                )
+                return {"status": "success", "data": lots}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error getting active lots: {e}")
+            return {"status": "error", "message": str(e)}
 
-    async def _create_lot(self, conn, symbol: str, qty: float, price: float) -> Dict[str, Any]:
-        """Create new active lot"""
+    async def _delete_lot(self, symbol: str) -> Dict[str, Any]:
+        """Delete lot record"""
         try:
-            await conn.execute("""
-                INSERT INTO active_lots (symbol, qty, price) 
-                VALUES ($1, $2, $3)
-            """, symbol, qty, price)
-            return {"success": True}
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    DELETE FROM lots
+                    WHERE symbol = $1
+                    """,
+                    symbol
+                )
+                return {"status": "success"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def _delete_lot(self, conn, symbol: str) -> Dict[str, Any]:
-        """Delete active lot"""
-        try:
-            await conn.execute("""
-                DELETE FROM active_lots 
-                WHERE symbol = $1
-            """, symbol)
-            return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    async def _create_history_lot(self, conn, action: str, symbol: str, qty: float, price: float) -> Dict[str, Any]:
-        """Create history lot record"""
-        try:
-            await conn.execute("""
-                INSERT INTO history_lots (action, symbol, qty, price) 
-                VALUES ($1, $2, $3, $4)
-            """, action, symbol, qty, price)
-            return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error deleting lot: {e}")
+            return {"status": "error", "message": str(e)}
 
     async def cleanup(self):
-        """Close database connection"""
+        """Cleanup resources"""
         if self.pool:
             await self.pool.close()
+            self.pool = None
 
 
 class ManagementServiceConfig(BaseModel):
-    """Management service configuration model"""
+    """Configuration for Management Service"""
     host: str = Field(..., description="Management service host")
     port: str = Field(..., description="Management service port")
-    token: str = Field(..., description="Management service API token")
+    token: str = Field(..., description="Management service token")
 
     model_config = ConfigDict(
         validate_assignment=True,
         frozen=True
     )
-
-    @field_validator("port")
-    def validate_port(cls, v: str) -> str:
-        try:
-            port = int(v)
-            if not 1 <= port <= 65535:
-                raise ValueError("Port must be between 1 and 65535")
-        except ValueError:
-            raise ValueError("Port must be a valid number")
-        return v
 
 
 class ManagementServiceInput(BaseModel):
@@ -295,62 +229,81 @@ class ManagementServiceInput(BaseModel):
 
 
 class ManagementServiceTool(BaseTool):
-    """Tool for interacting with management service"""
+    """Tool for interacting with Management Service"""
     name: str = "management_service"
-    description: str = "Tool for interacting with management service"
-    args_schema: Type[BaseModel] = ManagementServiceInput
+    description: str = "Tool for interacting with Management Service"
+    config: ManagementServiceConfig = Field(..., description="Management service configuration")
+    session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(
-        self,
-        host: str,
-        port: str,
-        token: str,
-        **kwargs
-    ):
+    def __init__(self, config: Dict[str, str], **kwargs):
         """Initialize ManagementServiceTool"""
         super().__init__(**kwargs)
-        self.config = ManagementServiceConfig(
-            host=host,
-            port=port,
-            token=token
-        ).model_dump()
-        self.base_url = f"http://{self.config['host']}:{self.config['port']}"
+        self.config = ManagementServiceConfig(**config)
+        self.session = None
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
         """Synchronous version not supported"""
         raise NotImplementedError("This tool only supports async operation")
 
-    async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
-        """Execute management service operations asynchronously"""
+    async def _arun(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
+        """Run management service operation"""
+        if not self.session:
+            self.session = aiohttp.ClientSession(
+                base_url=f"http://{self.config.host}:{self.config.port}",
+                headers={"Authorization": f"Bearer {self.config.token}"}
+            )
+
         try:
-            operation = kwargs.get("operation")
             if operation == "get_system_status":
-                return await self._make_request("GET", "/api/system/status")
-            elif operation == "get_price_limit":
-                return await self._make_request("GET", "/api/system/price-limit")
-            elif operation == "get_fake_balance":
-                return await self._make_request("GET", "/api/system/fake-balance")
-            elif operation == "get_num_available_lots":
-                return await self._make_request("GET", "/api/system/available-lots")
-            return {"success": False, "error": "Unknown operation"}
+                return await self._get_system_status()
+            elif operation == "get_price_limits":
+                return await self._get_price_limits(**kwargs)
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
 
         except Exception as e:
-            logger.error(f"Management service error: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error in management service operation: {e}")
+            return {"status": "error", "message": str(e)}
 
-    async def _make_request(self, method: str, endpoint: str, **kwargs: Any) -> Dict[str, Any]:
-        """Make HTTP request to management service"""
+    async def _get_system_status(self) -> Dict[str, Any]:
+        """Get system status from management service"""
         try:
-            headers = {"Authorization": f"Bearer {self.config['token']}"}
-            async with aiohttp.ClientSession() as session:
-                async with session.request(method, f"{self.base_url}{endpoint}", headers=headers, **kwargs) as response:
-                    if response.status == 200:
-                        return {"success": True, "data": await response.json()}
-                    return {"success": False, "error": f"HTTP {response.status}: {await response.text()}"}
+            async with self.session.get("/api/v1/system/status") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {"status": "success", "data": data}
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"HTTP {response.status}: {await response.text()}"
+                    }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error getting system status: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def _get_price_limits(self, symbol: str) -> Dict[str, Any]:
+        """Get price limits for symbol"""
+        try:
+            async with self.session.get(f"/api/v1/limits/{symbol}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {"status": "success", "data": data}
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"HTTP {response.status}: {await response.text()}"
+                    }
+        except Exception as e:
+            logger.error(f"Error getting price limits: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.session:
+            await self.session.close()
+            self.session = None
 
 
 class BybitOperationParams(BaseModel):
@@ -365,13 +318,12 @@ class BybitTradingInput(BaseModel):
 
 
 class BybitTradingTool(BaseTool):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
     args_schema: Type[BaseModel] = BybitTradingInput
-    client: Optional[HTTP] = Field(default=None, description="Bybit HTTP client")
+    client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(self, config: Dict[str, str]):
         super().__init__(name=self.name, description=self.description)

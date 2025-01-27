@@ -100,14 +100,10 @@ class TradingSystem:
     def _create_agents(self):
         """Create agent instances without initialization"""
         try:
-            # Create Parser Agent with signal processing callback
-            self.parser_agent = ParserAgent(
-                name="signal_parser",
-                api_id=self.config.telegram.api_id,
-                api_hash=self.config.telegram.api_hash,
-                api_session_token=self.config.telegram.session_token,
-                channel_url=self.config.telegram.channel_url,
-                message_callback=self.process_signal,
+            # Create Trading Agent first since it's used as a callback
+            self.trading_agent = TradingAgent(
+                name="trading_executor",
+                bybit_config=self.config.bybit.model_dump(),
                 llm_config=self.config.llm.model_dump()
             )
 
@@ -123,10 +119,14 @@ class TradingSystem:
                 llm_config=self.config.llm.model_dump()
             )
 
-            # Create Trading Agent first since it's used as a callback
-            self.trading_agent = TradingAgent(
-                name="trading_executor",
-                bybit_config=self.config.bybit.model_dump(),
+            # Create Parser Agent last since it depends on Balance Control Agent
+            self.parser_agent = ParserAgent(
+                name="signal_parser",
+                api_id=self.config.telegram.api_id,
+                api_hash=self.config.telegram.api_hash,
+                api_session_token=self.config.telegram.session_token,
+                channel_url=self.config.telegram.channel_url,
+                message_callback=self.process_signal,
                 llm_config=self.config.llm.model_dump()
             )
 

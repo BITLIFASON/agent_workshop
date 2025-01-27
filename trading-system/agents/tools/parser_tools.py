@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List, Type
+from typing import Dict, Any, Optional, List, Type, Callable
 from datetime import datetime
 import re
 from telethon import TelegramClient, events
@@ -141,99 +141,78 @@ class SignalParserTool(BaseTool):
         return self._run(message)
 
 
-class TelegramListenerInput(BaseModel):
-    """Input schema for TelegramListenerTool"""
-    channel_url: str = Field(..., description="Telegram channel URL to listen to")
+class TelegramConfig(BaseModel):
+    """Configuration for Telegram client"""
     api_id: int = Field(..., description="Telegram API ID")
     api_hash: str = Field(..., description="Telegram API hash")
-    session_token: str = Field(..., description="Telegram session token")
+    session_token: str = Field(..., description="Session token")
+    channel_url: str = Field(..., description="Channel URL to listen to")
 
     model_config = ConfigDict(
         validate_assignment=True,
         frozen=True
     )
 
-    @field_validator("channel_url")
-    def validate_channel_url(cls, v: str) -> str:
-        if not v.startswith("https://t.me/"):
-            raise ValueError("Channel URL must start with https://t.me/")
-        return v
-
 
 class TelegramListenerTool(BaseTool):
     """Tool for listening to Telegram messages"""
     name: str = "telegram_listener"
-    description: str = "Listen to Telegram messages from specified channels"
-    args_schema: Type[BaseModel] = TelegramListenerInput
-
+    description: str = "Tool for listening to Telegram messages"
+    client: Optional[TelegramClient] = Field(default=None, description="Telegram client")
+    channel_url: str = Field(default="", description="Channel URL to listen to")
+    message_callback: Optional[Callable] = Field(default=None, description="Callback for new messages")
+    
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        api_id: Optional[int] = None,
+        api_hash: Optional[str] = None,
+        session_token: Optional[str] = None,
+        channel_url: Optional[str] = None,
+        message_callback: Optional[Callable] = None,
+        **kwargs
+    ):
         """Initialize TelegramListenerTool"""
         super().__init__(**kwargs)
-        self.client: Optional[TelegramClient] = None
-        self._message_handlers: List[Any] = []
-        self._is_listening: bool = False
+        self.channel_url = channel_url if channel_url else ""
+        self.message_callback = message_callback
+        if api_id and api_hash and session_token:
+            self.client = TelegramClient(
+                session_token,
+                api_id,
+                api_hash
+            )
+        else:
+            self.client = None
 
-    def add_message_handler(self, handler):
-        """Add a message handler callback"""
-        self._message_handlers.append(handler)
-
-    async def initialize(self, api_id: int, api_hash: str, session_token: str) -> Dict[str, Any]:
-        """Initialize Telegram client"""
-        try:
-            self.client = TelegramClient(StringSession(session_token), api_id, api_hash)
-            if not self.client.is_connected():
-                await self.client.start()
-            return {'success': True}
-        except Exception as e:
-            logger.error(f"Failed to initialize Telegram client: {e}")
-            return {'success': False, 'error': str(e)}
-
-    async def cleanup(self):
-        """Cleanup Telegram client"""
-        try:
-            self._is_listening = False
-            if self.client and self.client.is_connected():
-                await self.client.disconnect()
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
-
-    def _run(self, channel_url: str) -> Dict[str, Any]:
+    def _run(self, **kwargs: Any) -> Dict[str, Any]:
         """Synchronous version not supported"""
         raise NotImplementedError("This tool only supports async operation")
 
-    async def _arun(self, channel_url: str, api_id: int, api_hash: str, session_token: str) -> Dict[str, Any]:
-        """Start listening to messages from the specified channel"""
+    async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
+        """Run the Telegram listener"""
+        if not self.client:
+            raise ValueError("Telegram client not initialized")
+        
         try:
-            if not self.client:
-                init_result = await self.initialize(api_id, api_hash, session_token)
-                if not init_result['success']:
-                    return init_result
+            if not self.client.is_connected():
+                await self.client.connect()
+                
+            if not await self.client.is_user_authorized():
+                await self.client.start()
 
-            if self._is_listening:
-                logger.warning("Already listening to channel")
-                return {'success': True}
-
-            @self.client.on(events.NewMessage(chats=[channel_url]))
-            async def message_handler(event):
-                try:
-                    for handler in self._message_handlers:
-                        await handler(event)
-                except Exception as e:
-                    logger.error(f"Error in message handler: {e}")
-
-            self._is_listening = True
-            logger.info(f"Started listening to channel: {channel_url}")
-
-            try:
+            async with self.client:
                 await self.client.run_until_disconnected()
-            except Exception as e:
-                logger.error(f"Unexpected disconnect: {e}")
-                return {'success': False, 'error': str(e)}
-
-            return {'success': True}
-
+                
+            return {"status": "success"}
+            
         except Exception as e:
-            logger.error(f"Error starting listener: {e}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"Error in Telegram listener: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.client:
+            await self.client.disconnect()
+            self.client = None

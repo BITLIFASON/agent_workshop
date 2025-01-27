@@ -1,5 +1,6 @@
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Optional, Callable
 import asyncio
+from loguru import logger
 from crewai import Agent, Task, Crew
 from .base_agent import BaseAgent
 from .tools.balance_tools import (
@@ -9,41 +10,39 @@ from .tools.balance_tools import (
 )
 
 class BalanceControlAgent(BaseAgent):
+    """Agent for controlling trading balance and lot management"""
+
     def __init__(
         self,
         name: str,
-        config: Dict[str, Any],
-        trading_callback: Callable,
-        llm_config: Dict[str, Any]
+        config: Dict[str, Dict[str, Any]],
+        trading_callback: Optional[Callable] = None,
+        llm_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize BalanceControlAgent"""
-        super().__init__(name, llm_config)
-        
-        # Initialize tools
-        self.management_tool = ManagementServiceTool(
-            host=config['management_api']['host'],
-            port=config['management_api']['port'],
-            token=config['management_api']['token']
-        )
-        
-        self.db_tool = DatabaseTool(
-            host=config['database']['host'],
-            port=config['database']['port'],
-            user=config['database']['user'],
-            password=config['database']['password'],
-            database=config['database']['database']
-        )
-        
-        self.trading_tool = BybitTradingTool(
-            api_key=config['bybit']['api_key'],
-            api_secret=config['bybit']['api_secret'],
-            demo_mode=config['bybit'].get('demo_mode', True)
+        super().__init__(
+            name=name,
+            llm_config=llm_config or {}
         )
 
-        # Add tools to agent
-        self.add_tool(self.management_tool)
-        self.add_tool(self.db_tool)
-        self.add_tool(self.trading_tool)
+        # Initialize tools
+        self.management_tool = ManagementServiceTool(
+            config=config["management_api"]
+        )
+
+        self.db_tool = DatabaseTool(
+            config=config["database"]
+        )
+
+        self.trading_tool = BybitTradingTool(
+            config=config["bybit"]
+        )
+
+        self.tools = [
+            self.management_tool,
+            self.db_tool,
+            self.trading_tool
+        ]
 
         self.trading_callback = trading_callback
 
@@ -95,173 +94,67 @@ class BalanceControlAgent(BaseAgent):
             verbose=True
         )
 
-    async def process_signal(self, signal: Dict[str, Any]):
-        """Process incoming trading signal"""
+    async def process_signal(self, signal_data: Dict[str, Any]) -> bool:
+        """Process trading signal"""
         try:
-            if not self.state.is_active:
-                self.logger.error("Agent not initialized")
-                return
+            logger.info(f"Processing signal in {self.name}: {signal_data}")
 
-            if signal["action"] == "buy":
-                await self._process_buy_signal(signal)
+            # Get system status
+            status_result = await self.management_tool._arun(
+                operation="get_system_status"
+            )
+            if status_result["status"] != "success":
+                logger.error(f"Failed to get system status: {status_result}")
+                return False
+
+            # Get price limits
+            limits_result = await self.management_tool._arun(
+                operation="get_price_limits",
+                symbol=signal_data["symbol"]
+            )
+            if limits_result["status"] != "success":
+                logger.error(f"Failed to get price limits: {limits_result}")
+                return False
+
+            # Execute trade if conditions are met
+            if self.trading_callback:
+                await self.trading_callback(signal_data)
+                logger.info(f"Trade executed for signal: {signal_data}")
+                return True
             else:
-                await self._process_sell_signal(signal)
+                logger.warning("No trading callback set")
+                return False
 
         except Exception as e:
-            self.logger.error(f"Error processing signal: {e}")
-            self.state.last_error = str(e)
-
-    async def _process_buy_signal(self, signal: Dict[str, Any]):
-        """Process buy signal"""
-        try:
-            # Check system status
-            status_result = await self.management_tool._arun(operation="get_system_status")
-            if not status_result["success"] or not status_result["data"]:
-                self.logger.warning("Trading system is not enabled")
-                return
-
-            # Check price limit
-            price_limit = await self.management_tool._arun(operation="get_price_limit")
-            if not price_limit["success"] or signal["price"] > price_limit["data"]:
-                self.logger.warning(f"Price {signal['price']} exceeds limit")
-                return
-
-            # Get fake balance
-            balance_result = await self.management_tool._arun(operation="get_fake_balance")
-            if not balance_result["success"]:
-                self.logger.error("Failed to get fake balance")
-                return
-            fake_balance = balance_result["data"]
-
-            # Get available lots
-            lots_result = await self.management_tool._arun(operation="get_num_available_lots")
-            if not lots_result["success"] or lots_result["data"] <= 0:
-                self.logger.warning("No available lots")
-                return
-
-            # Get symbol trading limits
-            symbol_info = await self.trading_tool._arun(
-                operation="get_coin_info",
-                symbol=signal["symbol"]
-            )
-            if not symbol_info["success"]:
-                self.logger.error(f"Failed to get symbol info: {symbol_info['error']}")
-                return
-
-            limits = symbol_info["data"]
-            
-            # Calculate position size based on fake balance and lots
-            lot_size = fake_balance / lots_result["data"]
-            qty = lot_size / signal["price"]
-
-            # Validate quantity
-            if qty < float(limits["min_qty"]):
-                self.logger.warning(f"Quantity {qty} is below minimum {limits['min_qty']}")
-                return
-
-            if qty > float(limits["max_qty"]):
-                self.logger.warning(f"Quantity {qty} exceeds maximum {limits['max_qty']}")
-                return
-
-            # Round to step size
-            step_size = float(limits["step_qty"])
-            qty = round(qty / step_size) * step_size
-
-            # Check minimum order value
-            order_value = qty * signal["price"]
-            if order_value < float(limits["min_order_usdt"]):
-                self.logger.warning(f"Order value {order_value} USDT is below minimum {limits['min_order_usdt']} USDT")
-                return
-
-            # Execute trade
-            trade_signal = {
-                "symbol": signal["symbol"],
-                "action": "buy",
-                "qty": qty,
-                "price": signal["price"]
-            }
-            await self.trading_callback(trade_signal)
-
-            # Record in database
-            await self.db_tool._arun(
-                operation="create_lot",
-                symbol=signal["symbol"],
-                qty=qty,
-                price=signal["price"]
-            )
-
-        except Exception as e:
-            self.logger.error(f"Error processing buy signal: {e}")
-            raise
-
-    async def _process_sell_signal(self, signal: Dict[str, Any]):
-        """Process sell signal"""
-        try:
-            # Check active lots
-            lots_result = await self.db_tool._arun(
-                operation="get_active_lots",
-                symbol=signal["symbol"]
-            )
-            if not lots_result["success"] or not lots_result["data"]:
-                self.logger.warning(f"No active lot found for {signal['symbol']}")
-                return
-
-            lot = lots_result["data"][0]
-
-            # Execute trade
-            trade_signal = {
-                "symbol": signal["symbol"],
-                "action": "sell",
-                "qty": float(lot["qty"]),
-                "price": signal["price"]
-            }
-            await self.trading_callback(trade_signal)
-
-            # Record transaction
-            await self.db_tool._arun(
-                operation="delete_lot",
-                symbol=signal["symbol"]
-            )
-
-            await self.db_tool._arun(
-                operation="create_history_lot",
-                action="sell",
-                symbol=signal["symbol"],
-                qty=float(lot["qty"]),
-                price=signal["price"]
-            )
-
-        except Exception as e:
-            self.logger.error(f"Error processing sell signal: {e}")
-            raise
-
-    async def initialize(self):
-        """Initialize the balance control agent"""
-        if not await super().initialize():
+            logger.error(f"Error processing signal in {self.name}: {e}")
             return False
 
-        self.logger.info("Initializing Balance Control Agent...")
-
-        # Initialize database
-        db_result = await self.db_tool.initialize()
-        if not db_result["success"]:
-            self.logger.error(f"Failed to initialize database: {db_result['error']}")
+    async def initialize(self) -> bool:
+        """Initialize agent and its tools"""
+        try:
+            logger.info(f"Initializing {self.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing {self.name}: {e}")
             return False
-
-        self.state.is_active = True
-        return True
 
     async def run(self):
         """Main execution loop"""
-        self.logger.info("Balance Control Agent running...")
-        while self.state.is_active:
-            try:
+        try:
+            logger.info(f"Starting {self.name}")
+            while True:
                 await asyncio.sleep(1)  # Prevent CPU overload
-            except Exception as e:
-                self.logger.error(f"Error in monitoring loop: {e}")
+        except Exception as e:
+            logger.error(f"Error in {self.name}: {e}")
+            raise
 
     async def cleanup(self):
-        """Cleanup resources"""
-        await self.db_tool.cleanup()
-        self.state.is_active = False
-        self.logger.info(f"Agent {self.name} cleaned up")
+        """Cleanup agent resources"""
+        try:
+            logger.info(f"Cleaning up {self.name}")
+            await self.management_tool.cleanup()
+            await self.db_tool.cleanup()
+            await self.trading_tool.cleanup()
+        except Exception as e:
+            logger.error(f"Error cleaning up {self.name}: {e}")
+            raise

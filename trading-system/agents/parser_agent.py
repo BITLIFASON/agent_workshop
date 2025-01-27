@@ -3,10 +3,13 @@ from crewai import Agent, Crew
 from .base_agent import BaseAgent
 from .tools.parser_tools import SignalData, SignalParserTool, TelegramListenerTool
 import asyncio
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Optional
+from loguru import logger
 
 
 class ParserAgent(BaseAgent):
+    """Agent for parsing trading signals from Telegram"""
+
     def __init__(
         self,
         name: str,
@@ -14,26 +17,27 @@ class ParserAgent(BaseAgent):
         api_hash: str,
         api_session_token: str,
         channel_url: str,
-        message_callback: Callable,
-        llm_config: Dict[str, Any]
+        message_callback: Optional[Callable] = None,
+        llm_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize ParserAgent"""
-        super().__init__(name, llm_config)
-        self.channel_url = channel_url
-        self.message_callback = message_callback
+        super().__init__(
+            name=name,
+            llm_config=llm_config or {},
+            system_message="You are a trading signal parser agent"
+        )
 
         # Initialize tools
-        self.telegram_tool = TelegramListenerTool()
+        self.telegram_tool = TelegramListenerTool(
+            api_id=api_id,
+            api_hash=api_hash,
+            session_token=api_session_token,
+            channel_url=channel_url,
+            message_callback=message_callback
+        )
+        
         self.parser_tool = SignalParserTool()
-
-        # Add tools to agent
-        self.add_tool(self.telegram_tool)
-        self.add_tool(self.parser_tool)
-
-        # Store Telegram credentials
-        self.api_id = api_id
-        self.api_hash = api_hash
-        self.api_session_token = api_session_token
+        self.tools = [self.telegram_tool, self.parser_tool]
 
         # Initialize Crew AI components
         self._setup_crew()
@@ -130,51 +134,28 @@ class ParserAgent(BaseAgent):
             return False
 
     async def run(self):
-        """Main execution loop"""
+        """Run the agent's main loop"""
         try:
-            if not self.state.is_active:
-                self.logger.error("Agent not initialized")
-                return
-
-            result = await self.telegram_tool._arun(
-                channel_url=self.channel_url,
-                api_id=self.api_id,
-                api_hash=self.api_hash,
-                session_token=self.api_session_token
-            )
-
-            if not result['success']:
-                self.logger.error(f"Failed to start listening: {result.get('error')}")
-                return
-
-            # Keep the agent running
-            while self.state.is_active:
-                await asyncio.sleep(1)
-
+            logger.info(f"Starting {self.name}")
+            await self.telegram_tool._arun()
         except Exception as e:
-            self.logger.error(f"Error in main loop: {e}")
-            self.state.last_error = str(e)
-            self.state.is_active = False
+            logger.error(f"Error in {self.name}: {e}")
+            raise
 
-    async def initialize(self):
-        """Initialize the parser agent"""
-        if not await super().initialize():
+    async def initialize(self) -> bool:
+        """Initialize agent and its tools"""
+        try:
+            logger.info(f"Initializing {self.name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing {self.name}: {e}")
             return False
-
-        self.logger.info("Initializing Parser Agent...")
-        result = await self.telegram_tool.initialize(
-            api_id=self.api_id,
-            api_hash=self.api_hash,
-            session_token=self.api_session_token
-        )
-        if not result['success']:
-            self.logger.error(f"Failed to initialize Telegram tool: {result.get('error')}")
-            return False
-
-        self.state.is_active = True
-        return True
 
     async def cleanup(self):
-        """Cleanup resources"""
-        await self.telegram_tool.cleanup()
-        await super().cleanup()
+        """Cleanup agent resources"""
+        try:
+            logger.info(f"Cleaning up {self.name}")
+            await self.telegram_tool.cleanup()
+        except Exception as e:
+            logger.error(f"Error cleaning up {self.name}: {e}")
+            raise
