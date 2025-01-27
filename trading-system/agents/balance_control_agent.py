@@ -16,13 +16,31 @@ class BalanceControlAgent(BaseAgent):
         trading_callback: Callable,
         llm_config: Dict[str, Any]
     ):
+        """Initialize BalanceControlAgent"""
         super().__init__(name, llm_config)
         
         # Initialize tools
-        self.management_tool = ManagementServiceTool(config['management_api'])
-        self.db_tool = DatabaseTool(config['database'])
-        self.trading_tool = BybitTradingTool(config['bybit'])
+        self.management_tool = ManagementServiceTool(
+            host=config['management_api']['host'],
+            port=config['management_api']['port'],
+            token=config['management_api']['token']
+        )
+        
+        self.db_tool = DatabaseTool(
+            host=config['database']['host'],
+            port=config['database']['port'],
+            user=config['database']['user'],
+            password=config['database']['password'],
+            database=config['database']['database']
+        )
+        
+        self.trading_tool = BybitTradingTool(
+            api_key=config['bybit']['api_key'],
+            api_secret=config['bybit']['api_secret'],
+            demo_mode=config['bybit'].get('demo_mode', True)
+        )
 
+        # Add tools to agent
         self.add_tool(self.management_tool)
         self.add_tool(self.db_tool)
         self.add_tool(self.trading_tool)
@@ -84,10 +102,6 @@ class BalanceControlAgent(BaseAgent):
                 self.logger.error("Agent not initialized")
                 return
 
-            # Validate signal
-            if not await self._validate_signal(signal):
-                return
-
             if signal["action"] == "buy":
                 await self._process_buy_signal(signal)
             else:
@@ -100,84 +114,62 @@ class BalanceControlAgent(BaseAgent):
     async def _process_buy_signal(self, signal: Dict[str, Any]):
         """Process buy signal"""
         try:
-            # Check system status and constraints
-            system_task = Task(
-                description=f"""Check trading system status and constraints:
-                Symbol: {signal['symbol']}
-                Price: {signal['price']}
-                
-                1. Is system enabled?
-                2. Check if price exceeds current limit
-                3. Get fake balance
-                4. Get number of available lots""",
-                agent=self.system_monitor
-            )
-            system_result = await self.crew.kickoff([system_task])
-
-            if not system_result.get("system_enabled", False):
+            # Check system status
+            status_result = await self.management_tool._arun(operation="get_system_status")
+            if not status_result["success"] or not status_result["data"]:
                 self.logger.warning("Trading system is not enabled")
                 return
 
-            if system_result.get("price_exceeded", False):
+            # Check price limit
+            price_limit = await self.management_tool._arun(operation="get_price_limit")
+            if not price_limit["success"] or signal["price"] > price_limit["data"]:
                 self.logger.warning(f"Price {signal['price']} exceeds limit")
                 return
 
-            fake_balance = system_result.get("fake_balance", 0)
-            available_lots = system_result.get("available_lots", 0)
+            # Get fake balance
+            balance_result = await self.management_tool._arun(operation="get_fake_balance")
+            if not balance_result["success"]:
+                self.logger.error("Failed to get fake balance")
+                return
+            fake_balance = balance_result["data"]
 
-            if available_lots <= 0:
+            # Get available lots
+            lots_result = await self.management_tool._arun(operation="get_num_available_lots")
+            if not lots_result["success"] or lots_result["data"] <= 0:
                 self.logger.warning("No available lots")
                 return
 
             # Get symbol trading limits
-            symbol_info = await self.trading_tool.execute("get_coin_info", symbol=signal['symbol'])
-            if not symbol_info.success:
-                self.logger.error(f"Failed to get symbol info: {symbol_info.error}")
-                return
-
-            limits = symbol_info.data
-            
-            # Calculate position size
-            analysis_task = Task(
-                description=f"""Analyze trade and calculate position size:
-                Symbol: {signal['symbol']}
-                Entry Price: {signal['price']}
-                Fake Balance: {fake_balance}
-                Available Lots: {available_lots}
-                Min Order Size: {limits['min_order_usdt']} USDT
-                Min Quantity: {limits['min_qty']}
-                Max Quantity: {limits['max_qty']}
-                Step Size: {limits['step_qty']}
-                
-                1. Calculate optimal quantity based on fake balance and lots
-                2. Ensure quantity meets min/max limits
-                3. Round quantity to step size
-                4. Verify total value >= min order size""",
-                agent=self.trade_analyzer
+            symbol_info = await self.trading_tool._arun(
+                operation="get_coin_info",
+                symbol=signal["symbol"]
             )
-            analysis_result = await self.crew.kickoff([analysis_task])
-
-            qty = analysis_result.get("position_size")
-            if not qty:
-                self.logger.warning("Failed to calculate position size")
+            if not symbol_info["success"]:
+                self.logger.error(f"Failed to get symbol info: {symbol_info['error']}")
                 return
+
+            limits = symbol_info["data"]
+            
+            # Calculate position size based on fake balance and lots
+            lot_size = fake_balance / lots_result["data"]
+            qty = lot_size / signal["price"]
 
             # Validate quantity
-            if qty < float(limits['min_qty']):
+            if qty < float(limits["min_qty"]):
                 self.logger.warning(f"Quantity {qty} is below minimum {limits['min_qty']}")
                 return
 
-            if qty > float(limits['max_qty']):
+            if qty > float(limits["max_qty"]):
                 self.logger.warning(f"Quantity {qty} exceeds maximum {limits['max_qty']}")
                 return
 
             # Round to step size
-            step_size = float(limits['step_qty'])
+            step_size = float(limits["step_qty"])
             qty = round(qty / step_size) * step_size
 
             # Check minimum order value
-            order_value = qty * signal['price']
-            if order_value < float(limits['min_order_usdt']):
+            order_value = qty * signal["price"]
+            if order_value < float(limits["min_order_usdt"]):
                 self.logger.warning(f"Order value {order_value} USDT is below minimum {limits['min_order_usdt']} USDT")
                 return
 
@@ -191,17 +183,12 @@ class BalanceControlAgent(BaseAgent):
             await self.trading_callback(trade_signal)
 
             # Record in database
-            db_task = Task(
-                description=f"""Record buy transaction:
-                Symbol: {signal['symbol']}
-                Quantity: {qty}
-                Price: {signal['price']}
-                
-                1. Create new lot record
-                2. Create history record""",
-                agent=self.db_manager
+            await self.db_tool._arun(
+                operation="create_lot",
+                symbol=signal["symbol"],
+                qty=qty,
+                price=signal["price"]
             )
-            await self.crew.kickoff([db_task])
 
         except Exception as e:
             self.logger.error(f"Error processing buy signal: {e}")
@@ -211,135 +198,70 @@ class BalanceControlAgent(BaseAgent):
         """Process sell signal"""
         try:
             # Check active lots
-            db_task = Task(
-                description=f"""Check active lots for {signal['symbol']}:
-                1. Get active lot information
-                2. Verify lot exists""",
-                agent=self.db_manager
+            lots_result = await self.db_tool._arun(
+                operation="get_active_lots",
+                symbol=signal["symbol"]
             )
-            result = await self.crew.kickoff([db_task])
-
-            lot = result.get("active_lot")
-            if not lot:
+            if not lots_result["success"] or not lots_result["data"]:
                 self.logger.warning(f"No active lot found for {signal['symbol']}")
                 return
+
+            lot = lots_result["data"][0]
 
             # Execute trade
             trade_signal = {
                 "symbol": signal["symbol"],
                 "action": "sell",
-                "qty": lot["qty"],
+                "qty": float(lot["qty"]),
                 "price": signal["price"]
             }
             await self.trading_callback(trade_signal)
 
             # Record transaction
-            record_task = Task(
-                description=f"""Record sell transaction:
-                Symbol: {signal['symbol']}
-                Quantity: {lot['qty']}
-                Price: {signal['price']}
-                
-                1. Delete active lot
-                2. Create history record""",
-                agent=self.db_manager
+            await self.db_tool._arun(
+                operation="delete_lot",
+                symbol=signal["symbol"]
             )
-            await self.crew.kickoff([record_task])
+
+            await self.db_tool._arun(
+                operation="create_history_lot",
+                action="sell",
+                symbol=signal["symbol"],
+                qty=float(lot["qty"]),
+                price=signal["price"]
+            )
 
         except Exception as e:
             self.logger.error(f"Error processing sell signal: {e}")
             raise
-
-    async def _validate_signal(self, signal: Dict[str, Any]) -> bool:
-        """Validate trading signal"""
-        required_fields = ["symbol", "action", "price"]
-        if not all(field in signal for field in required_fields):
-            self.logger.warning(f"Missing required fields in signal: {signal}")
-            return False
-            
-        try:
-            # Validate symbol format
-            if not signal["symbol"].endswith('USDT'):
-                self.logger.warning(f"Invalid symbol format: {signal['symbol']}")
-                return False
-                
-            # Validate price
-            if not isinstance(signal["price"], (int, float)) or signal["price"] <= 0:
-                self.logger.warning(f"Invalid price: {signal['price']}")
-                return False
-                
-            # Validate action
-            if signal["action"] not in ["buy", "sell"]:
-                self.logger.warning(f"Invalid action: {signal['action']}")
-                return False
-                
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error validating signal: {e}")
-            return False
 
     async def initialize(self):
         """Initialize the balance control agent"""
         if not await super().initialize():
             return False
 
-        try:
-            self.logger.info("Initializing Balance Control Agent...")
-            
-            # Initialize tools
-            db_init = await self.db_tool.initialize()
-            if not db_init.success:
-                self.logger.error(f"Failed to initialize database tool: {db_init.error}")
-                return False
+        self.logger.info("Initializing Balance Control Agent...")
 
-            # Test management service connection
-            status = await self.management_tool.execute("get_system_status")
-            if not status.success:
-                self.logger.error(f"Failed to connect to management service: {status.error}")
-                return False
-
-            # Test trading tool connection
-            balance = await self.trading_tool.execute("get_wallet_balance")
-            if not balance.success:
-                self.logger.error(f"Failed to connect to trading service: {balance.error}")
-                return False
-
-            self.state.is_active = True
-            self.logger.info("Balance Control Agent initialized successfully")
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Failed to initialize Balance Control Agent: {e}")
+        # Initialize database
+        db_result = await self.db_tool.initialize()
+        if not db_result["success"]:
+            self.logger.error(f"Failed to initialize database: {db_result['error']}")
             return False
 
-    async def cleanup(self):
-        """Cleanup resources"""
-        try:
-            if hasattr(self.db_tool, 'cleanup'):
-                await self.db_tool.cleanup()
-            if hasattr(self.trading_tool, 'cleanup'):
-                await self.trading_tool.cleanup()
-            await super().cleanup()
-        except Exception as e:
-            self.logger.error(f"Error during cleanup: {e}")
+        self.state.is_active = True
+        return True
 
     async def run(self):
         """Main execution loop"""
         self.logger.info("Balance Control Agent running...")
         while self.state.is_active:
             try:
-                # Monitor system status
-                status_task = Task(
-                    description="""Monitor system parameters:
-                    1. Check system status
-                    2. Verify price limits
-                    3. Monitor fake balance
-                    4. Track available lots""",
-                    agent=self.system_monitor
-                )
-                await self.crew.kickoff([status_task])
+                await asyncio.sleep(1)  # Prevent CPU overload
             except Exception as e:
                 self.logger.error(f"Error in monitoring loop: {e}")
-            
-            await asyncio.sleep(60)  # Check every minute
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        await self.db_tool.cleanup()
+        self.state.is_active = False
+        self.logger.info(f"Agent {self.name} cleaned up")

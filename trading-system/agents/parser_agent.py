@@ -3,7 +3,7 @@ from crewai import Agent, Crew
 from .base_agent import BaseAgent
 from .tools.parser_tools import SignalData, SignalParserTool, TelegramListenerTool
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 
 
 class ParserAgent(BaseAgent):
@@ -14,21 +14,26 @@ class ParserAgent(BaseAgent):
         api_hash: str,
         api_session_token: str,
         channel_url: str,
-        message_callback,
+        message_callback: Callable,
         llm_config: Dict[str, Any]
     ):
+        """Initialize ParserAgent"""
         super().__init__(name, llm_config)
         self.channel_url = channel_url
         self.message_callback = message_callback
 
-        # Initialize Telegram tool
-        self.telegram_tool = TelegramListenerTool(api_id, api_hash, api_session_token)
-        self.telegram_tool.add_message_handler(self.process_message)
-        self.add_tool(self.telegram_tool)
-
-        # Initialize parser tool
+        # Initialize tools
+        self.telegram_tool = TelegramListenerTool()
         self.parser_tool = SignalParserTool()
+
+        # Add tools to agent
+        self.add_tool(self.telegram_tool)
         self.add_tool(self.parser_tool)
+
+        # Store Telegram credentials
+        self.api_id = api_id
+        self.api_hash = api_hash
+        self.api_session_token = api_session_token
 
         # Initialize Crew AI components
         self._setup_crew()
@@ -76,7 +81,7 @@ class ParserAgent(BaseAgent):
             self.logger.info(f"Processing message: {message_text}")
 
             # Parse signal using parser tool
-            signal = await self.parser_tool._arun(message_text)
+            signal = await self.parser_tool._arun(message=message_text)
             
             if not signal:
                 self.logger.warning("Failed to parse message as trading signal")
@@ -88,7 +93,7 @@ class ParserAgent(BaseAgent):
             # Validate signal timing
             if self._is_signal_valid(signal):
                 # Convert to dict and add timestamp
-                signal_dict = signal.dict()
+                signal_dict = signal.model_dump()
                 signal_dict["timestamp"] = signal.timestamp
                 
                 await self.message_callback(signal_dict)
@@ -131,7 +136,13 @@ class ParserAgent(BaseAgent):
                 self.logger.error("Agent not initialized")
                 return
 
-            result = await self.telegram_tool.start_listening(self.channel_url)
+            result = await self.telegram_tool._arun(
+                channel_url=self.channel_url,
+                api_id=self.api_id,
+                api_hash=self.api_hash,
+                session_token=self.api_session_token
+            )
+
             if not result['success']:
                 self.logger.error(f"Failed to start listening: {result.get('error')}")
                 return
@@ -151,7 +162,11 @@ class ParserAgent(BaseAgent):
             return False
 
         self.logger.info("Initializing Parser Agent...")
-        result = await self.telegram_tool.initialize()
+        result = await self.telegram_tool.initialize(
+            api_id=self.api_id,
+            api_hash=self.api_hash,
+            session_token=self.api_session_token
+        )
         if not result['success']:
             self.logger.error(f"Failed to initialize Telegram tool: {result.get('error')}")
             return False

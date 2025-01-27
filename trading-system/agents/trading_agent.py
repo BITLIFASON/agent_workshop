@@ -1,8 +1,8 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Callable
 import asyncio
 from crewai import Agent, Task, Crew
 from .base_agent import BaseAgent
-from .tools.trading_tools import BybitTradingTool, OrderValidatorTool
+from .tools.trading_tools import BybitTradingTool, TradingOperationInput
 
 class TradingAgent(BaseAgent):
     def __init__(
@@ -10,16 +10,20 @@ class TradingAgent(BaseAgent):
         name: str,
         bybit_config: Dict[str, str],
         llm_config: Dict[str, Any],
-        execution_callback=None
+        execution_callback: Optional[Callable] = None
     ):
+        """Initialize TradingAgent"""
         super().__init__(name, llm_config)
 
         # Initialize tools
-        self.trading_tool = BybitTradingTool(bybit_config)
-        self.validator_tool = OrderValidatorTool()
+        self.trading_tool = BybitTradingTool(
+            api_key=bybit_config['api_key'],
+            api_secret=bybit_config['api_secret'],
+            demo_mode=bybit_config.get('demo_mode', True)
+        )
 
+        # Add tools to agent
         self.add_tool(self.trading_tool)
-        self.add_tool(self.validator_tool)
 
         self.execution_callback = execution_callback
         self.retry_attempts = 3
@@ -36,11 +40,11 @@ class TradingAgent(BaseAgent):
             role="Market Analyst",
             goal="Analyze market conditions and validate order parameters",
             backstory="""You are a market analysis expert who evaluates trading conditions
-            and validates order parameters. You use order validation tools to ensure trades
-            meet all requirements and market conditions are suitable for execution.""",
+            and validates order parameters. You ensure trades meet all requirements and 
+            market conditions are suitable for execution.""",
             verbose=True,
             allow_delegation=False,
-            tools=[self.validator_tool],
+            tools=[self.trading_tool],
             llm=llm
         )
 
@@ -69,20 +73,16 @@ class TradingAgent(BaseAgent):
                 self.logger.error("Agent not initialized")
                 return
 
-            # Prepare order data for validation
-            order_data = {
-                "symbol": trade_signal["symbol"],
-                "side": trade_signal["action"],
-                "qty": trade_signal["qty"]
-            }
-
             # Get current market price
-            price_check = await self.trading_tool.execute("get_market_price", symbol=trade_signal["symbol"])
-            if not price_check.success:
-                self.logger.error(f"Failed to get market price: {price_check.error}")
+            price_check = await self.trading_tool._arun(
+                operation="get_market_price",
+                symbol=trade_signal["symbol"]
+            )
+            if not price_check["success"]:
+                self.logger.error(f"Failed to get market price: {price_check['error']}")
                 return
 
-            current_price = price_check.data
+            current_price = price_check["data"]
             signal_price = trade_signal["price"]
 
             # Check if price hasn't moved too much (1% tolerance)
@@ -94,31 +94,17 @@ class TradingAgent(BaseAgent):
                 )
                 return
 
-            # Analyze market conditions and validate order
-            analysis_task = Task(
-                description=f"""Analyze and validate trade order:
-                Symbol: {order_data['symbol']}
-                Action: {order_data['side']}
-                Quantity: {order_data['qty']}
-                Signal Price: {signal_price}
-                Current Price: {current_price}
-                
-                1. Validate order parameters using OrderValidatorTool
-                2. Check symbol trading status
-                3. Verify quantity meets requirements
-                4. Ensure price is within allowed range""",
-                agent=self.market_analyst
-            )
-            analysis_result = await self.crew.kickoff([analysis_task])
-
-            if not analysis_result.get("validation_passed", False):
-                self.logger.warning(f"Order validation failed: {analysis_result.get('reason', 'Unknown reason')}")
-                return
-
             # Execute order with retry mechanism
+            order_data = {
+                "operation": "place_order",
+                "symbol": trade_signal["symbol"],
+                "side": trade_signal["action"].capitalize(),
+                "qty": trade_signal["qty"]
+            }
             execution_result = await self._execute_order_with_retry(order_data)
-            if not execution_result.get("success"):
-                self.logger.error(f"Order execution failed: {execution_result.get('error')}")
+            
+            if not execution_result["success"]:
+                self.logger.error(f"Order execution failed: {execution_result['error']}")
                 return
 
             # Update state and notify
@@ -127,7 +113,7 @@ class TradingAgent(BaseAgent):
                 await self.execution_callback({
                     "status": "success",
                     "order": order_data,
-                    "result": execution_result.get("data"),
+                    "result": execution_result["data"],
                     "price": current_price
                 })
 
@@ -140,16 +126,16 @@ class TradingAgent(BaseAgent):
         retries = 0
         while retries < max_retries:
             try:
-                result = await self.trading_tool.execute("place_order", **order_data)
-                if result.success:
-                    return {"success": True, "data": result.data}
+                result = await self.trading_tool._arun(**order_data)
+                if result["success"]:
+                    return result
                 
                 retries += 1
                 if retries < max_retries:
-                    self.logger.warning(f"Retry {retries}/{max_retries}: {result.error}")
+                    self.logger.warning(f"Retry {retries}/{max_retries}: {result['error']}")
                     await asyncio.sleep(self.retry_delay)
                 else:
-                    return {"success": False, "error": f"Max retries reached: {result.error}"}
+                    return {"success": False, "error": f"Max retries reached: {result['error']}"}
                     
             except Exception as e:
                 retries += 1
@@ -168,9 +154,9 @@ class TradingAgent(BaseAgent):
 
         try:
             # Verify exchange connection
-            balance = await self.trading_tool.execute("get_wallet_balance")
-            if not balance.success:
-                self.logger.error(f"Failed to connect to exchange: {balance.error}")
+            balance = await self.trading_tool._arun(operation="get_wallet_balance")
+            if not balance["success"]:
+                self.logger.error(f"Failed to connect to exchange: {balance['error']}")
                 return False
 
             self.state.is_active = True
@@ -185,19 +171,9 @@ class TradingAgent(BaseAgent):
         self.logger.info("Trading Agent running...")
         while self.state.is_active:
             try:
-                # Monitor trading status
-                monitor_task = Task(
-                    description="""Monitor trading status:
-                    1. Check active orders
-                    2. Verify trading system health
-                    3. Monitor execution performance""",
-                    agent=self.market_analyst
-                )
-                await self.crew.kickoff([monitor_task])
+                await asyncio.sleep(1)  # Prevent CPU overload
             except Exception as e:
                 self.logger.error(f"Error in monitoring loop: {e}")
-
-            await asyncio.sleep(1)  # Prevent CPU overload
 
     async def cleanup(self):
         """Cleanup resources"""
