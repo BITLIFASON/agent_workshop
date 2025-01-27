@@ -4,8 +4,6 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from crewai.tools import BaseTool
 
-from crewai_tools import DirectoryReadTool
-
 class CoinInfo(BaseModel):
     """Model for coin information"""
     max_qty: float = Field(..., description="Maximum order quantity")
