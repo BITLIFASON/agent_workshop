@@ -23,7 +23,8 @@ class TradingAgent(BaseAgent):
             backstory="""You are a trading executor responsible for placing and managing orders
             on the Bybit exchange. You ensure trades are executed with proper parameters and
             monitor their execution status.""",
-            llm_config=llm_config or {}
+            llm_config=llm_config,
+            tools=[]
         )
 
         # Initialize trading tool

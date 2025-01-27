@@ -3,25 +3,37 @@ from crewai import Agent
 from loguru import logger
 from crewai.tools import BaseTool
 
-class BaseAgent(Agent):
+
+class BaseAgent:
     """Base class for all agents in the system"""
 
     def __init__(
         self,
         name: str,
+        role: str,
+        goal: str,
+        backstory: str,
         llm_config: Optional[Dict[str, Any]] = None,
         tools: Optional[List[BaseTool]] = None
     ):
         """Initialize base agent"""
-        super().__init__(
-            name=name,
-            role=name,  # Use name as role by default
-            goal="Base agent goal",
-            backstory="Base agent backstory",
-            llm_config=llm_config or {},
-            tools=tools or []
-        )
+        self.name = name
+        self.role = role
+        self.goal = goal
+        self.backstory = backstory
+        self.llm_config = llm_config or {}
         self.tools = tools or []
+
+        # Create CrewAI agent
+        self.agent = Agent(
+            name=name,
+            role=role,
+            goal=goal,
+            backstory=backstory,
+            llm_config=self.llm_config,
+            tools=self.tools,
+            verbose=True
+        )
 
     def add_tool(self, tool: BaseTool):
         """Add tool to agent"""

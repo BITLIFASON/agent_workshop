@@ -28,7 +28,8 @@ class ParserAgent(BaseAgent):
             backstory="""You are a signal parser responsible for monitoring Telegram channels,
             extracting trading signals, and validating their format and content. You ensure
             signals are properly formatted and contain all required information.""",
-            llm_config=llm_config or {}
+            llm_config=llm_config,
+            tools=[]
         )
 
         # Initialize tools

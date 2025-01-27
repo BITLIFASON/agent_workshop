@@ -27,7 +27,8 @@ class BalanceControlAgent(BaseAgent):
             backstory="""You are a balance controller responsible for managing trading balance
             and lots. You ensure trades comply with system limits, monitor fake balance,
             and maintain proper lot allocation.""",
-            llm_config=llm_config or {}
+            llm_config=llm_config,
+            tools=[]
         )
 
         # Initialize tools
