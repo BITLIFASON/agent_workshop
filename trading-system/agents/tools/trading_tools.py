@@ -138,10 +138,14 @@ class BybitTradingTool(BaseTool):
         **kwargs
     ):
         """Initialize BybitTradingTool"""
-        super().__init__(**kwargs)
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.demo_mode = demo_mode
+        super().__init__(
+            name=self.name,
+            description=self.description,
+            api_key=api_key,
+            api_secret=api_secret,
+            demo_mode=demo_mode,
+            **kwargs
+        )
         self.client = HTTP(
             testnet=demo_mode,
             api_key=api_key,

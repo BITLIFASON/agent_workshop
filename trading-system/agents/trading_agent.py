@@ -29,8 +29,8 @@ class TradingAgent(BaseAgent):
 
         # Initialize trading tool
         self.trading_tool = BybitTradingTool(
-            api_key=bybit_config['api_key'],
-            api_secret=bybit_config['api_secret'],
+            api_key=bybit_config.get('api_key'),
+            api_secret=bybit_config.get('api_secret'),
             demo_mode=bybit_config.get('demo_mode', True)
         )
         self.tools = [self.trading_tool]
