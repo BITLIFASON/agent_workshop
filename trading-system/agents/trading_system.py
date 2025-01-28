@@ -10,10 +10,11 @@ from .trading_agent import TradingAgent
 
 class TelegramConfig(BaseModel):
     """Telegram configuration model"""
-    api_id: int = Field(..., description="Telegram API ID")
-    api_hash: str = Field(..., description="Telegram API hash")
-    session_token: str = Field(..., description="Telegram session token")
-    channel_url: str = Field(..., description="Telegram channel URL")
+    api_id: int = Field(int, description="Telegram API ID")
+    api_hash: str = Field(str, description="Telegram API hash")
+    session_token: str = Field(str, description="Telegram session token")
+    channel_url: str = Field(str, description="Telegram channel URL")
+    max_retries: int = Field(int, description="Maximum number of reconnection attempts")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -23,8 +24,8 @@ class TelegramConfig(BaseModel):
 
 class BybitConfig(BaseModel):
     """Bybit configuration model"""
-    api_key: str = Field(..., description="Bybit API key")
-    api_secret: str = Field(..., description="Bybit API secret")
+    api_key: str = Field(str, description="Bybit API key")
+    api_secret: str = Field(str, description="Bybit API secret")
     demo_mode: bool = Field(default=True, description="Whether to use testnet")
 
     model_config = ConfigDict(
@@ -35,11 +36,11 @@ class BybitConfig(BaseModel):
 
 class DatabaseConfig(BaseModel):
     """Database configuration model"""
-    host: str = Field(..., description="Database host")
-    port: str = Field(..., description="Database port")
-    user: str = Field(..., description="Database user")
-    password: str = Field(..., description="Database password")
-    database: str = Field(..., description="Database name")
+    host: str = Field(str, description="Database host")
+    port: str = Field(str, description="Database port")
+    user: str = Field(str, description="Database user")
+    password: str = Field(str, description="Database password")
+    database: str = Field(str, description="Database name")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -49,9 +50,9 @@ class DatabaseConfig(BaseModel):
 
 class ManagementAPIConfig(BaseModel):
     """Management API configuration model"""
-    host: str = Field(..., description="Management API host")
-    port: str = Field(..., description="Management API port")
-    token: str = Field(..., description="Management API token")
+    host: str = Field(str, description="Management API host")
+    port: str = Field(str, description="Management API port")
+    token: str = Field(str, description="Management API token")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -61,9 +62,9 @@ class ManagementAPIConfig(BaseModel):
 
 class LLMConfig(BaseModel):
     """LLM configuration model"""
-    provider: str = Field(..., description="LLM provider name")
-    model: str = Field(..., description="LLM model name")
-    api_key: str = Field(..., description="LLM API key")
+    provider: str = Field(str, description="LLM provider name")
+    model: str = Field(str, description="LLM model name")
+    api_key: str = Field(str, description="LLM API key")
     temperature: float = Field(default=0.7, description="LLM temperature")
 
     model_config = ConfigDict(

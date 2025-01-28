@@ -24,7 +24,8 @@ def load_config() -> Dict[str, Any]:
             "api_id": int(os.getenv("API_ID")),
             "api_hash": os.getenv("API_HASH"),
             "session_token": os.getenv("API_SESSION_TOKEN"),
-            "channel_url": os.getenv("CHANNEL_URL")
+            "channel_url": os.getenv("CHANNEL_URL"),
+            "max_retries": int(os.getenv("MAX_RETRIES_TELEGRAM", 3))
         },
         
         "management_api": {

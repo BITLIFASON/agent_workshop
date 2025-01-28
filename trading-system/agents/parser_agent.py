@@ -35,6 +35,7 @@ class ParserAgent(BaseAgent):
             api_hash=telegram_config.get('api_hash'),
             session_token=telegram_config.get('session_token'),
             channel_url=telegram_config.get('channel_url'),
+            max_retries=telegram_config.get('max_retries'),
             message_callback=message_callback
         )
         
@@ -74,21 +75,20 @@ class ParserAgent(BaseAgent):
             verbose=True
         )
 
-    async def process_message(self, event):
+    async def process_message(self, message_text: str):
         """Process incoming Telegram message"""
         try:
             if not self.state.is_active:
-                self.logger.warning("Agent not active, skipping message processing")
+                logger.warning("Agent not active, skipping message processing")
                 return
 
-            message_text = event.message.message.strip()
-            self.logger.info(f"Processing message: {message_text}")
+            logger.info(f"Processing message: {message_text}")
 
             # Parse signal using parser tool
             signal = await self.parser_tool._arun(message=message_text)
             
             if not signal:
-                self.logger.warning("Failed to parse message as trading signal")
+                logger.warning("Failed to parse message as trading signal")
                 return
 
             # Update agent state
@@ -101,12 +101,12 @@ class ParserAgent(BaseAgent):
                 signal_dict["timestamp"] = signal.timestamp
                 
                 await self.message_callback(signal_dict)
-                self.logger.info(f"Signal processed: {signal_dict}")
+                logger.info(f"Signal processed: {signal_dict}")
             else:
-                self.logger.warning(f"Signal outdated: {signal}")
+                logger.warning(f"Signal outdated: {signal}")
 
         except Exception as e:
-            self.logger.error(f"Error processing message: {e}")
+            logger.error(f"Error processing message: {e}")
             self.state.last_error = str(e)
 
     def _is_signal_valid(self, signal: SignalData) -> bool:
@@ -122,7 +122,7 @@ class ParserAgent(BaseAgent):
                 is_valid = now - signal_time < timedelta(hours=24)
 
             if not is_valid:
-                self.logger.warning(
+                logger.warning(
                     f"Signal expired: {signal.action} signal for {signal.symbol} "
                     f"from {signal_time.strftime('%Y-%m-%d %H:%M:%S')}"
                 )
@@ -130,14 +130,19 @@ class ParserAgent(BaseAgent):
             return is_valid
 
         except Exception as e:
-            self.logger.error(f"Error validating signal timing: {e}")
+            logger.error(f"Error validating signal timing: {e}")
             return False
 
     async def run(self):
         """Run the agent's main loop"""
         try:
             logger.info(f"Starting {self.name}")
-            await self.telegram_tool._arun()
+            
+            # Start Telegram listener
+            result = await self.telegram_tool._arun()
+            if result["status"] != "success":
+                raise Exception(f"Failed to start Telegram listener: {result['message']}")
+                
         except Exception as e:
             logger.error(f"Error in {self.name}: {e}")
             raise
@@ -146,6 +151,10 @@ class ParserAgent(BaseAgent):
         """Initialize agent and its tools"""
         try:
             logger.info(f"Initializing {self.name}")
+            
+            # Set message callback
+            self.telegram_tool.message_callback = self.process_message
+            
             return True
         except Exception as e:
             logger.error(f"Error initializing {self.name}: {e}")
