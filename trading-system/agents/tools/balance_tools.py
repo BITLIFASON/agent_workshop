@@ -244,6 +244,9 @@ class ManagementServiceTool(BaseTool):
     name: str = "management_service"
     description: str = "Tool for interacting with Management Service"
     session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
+    host: str = Field(..., description="Management service host")
+    port: str = Field(..., description="Management service port")
+    token: str = Field(..., description="Management service token")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

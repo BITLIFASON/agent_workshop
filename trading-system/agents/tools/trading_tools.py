@@ -124,6 +124,9 @@ class BybitTradingTool(BaseTool):
     description: str = "Tool for executing trades on Bybit"
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
+    api_key: str = Field(..., description="Bybit API key")
+    api_secret: str = Field(..., description="Bybit API secret")
+    demo_mode: bool = Field(default=True, description="Whether to use testnet")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -136,6 +139,9 @@ class BybitTradingTool(BaseTool):
     ):
         """Initialize BybitTradingTool"""
         super().__init__(**kwargs)
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.demo_mode = demo_mode
         self.client = HTTP(
             testnet=demo_mode,
             api_key=api_key,

@@ -17,39 +17,41 @@ class BalanceControlAgent(BaseAgent):
         name: str,
         config: Dict[str, Dict[str, Any]],
         trading_callback: Optional[Callable] = None,
-        llm_config: Optional[Dict[str, Any]] = None
+        llm_config: Optional[Dict[str, Any]] = None,
+        **kwargs
     ):
         """Initialize BalanceControlAgent"""
         super().__init__(
             name=name,
             role="Balance Controller",
-            goal="Control trading balance and manage lots",
-            backstory="""You are a balance controller responsible for managing trading balance
-            and lots. You ensure trades comply with system limits, monitor fake balance,
-            and maintain proper lot allocation.""",
+            goal="Monitor and control trading balance",
+            backstory="I am responsible for managing trading balances and ensuring compliance with system limits",
             llm_config=llm_config,
-            tools=[]
+            **kwargs
         )
 
         # Initialize tools
+        management_config = config.get('management_service', {})
         self.management_tool = ManagementServiceTool(
-            host=config['management_api']['host'],
-            port=config['management_api']['port'],
-            token=config['management_api']['token']
+            host=management_config.get('host'),
+            port=management_config.get('port'),
+            token=management_config.get('token')
         )
 
+        db_config = config.get('database', {})
         self.db_tool = DatabaseTool(
-            host=config['database']['host'],
-            port=config['database']['port'],
-            user=config['database']['user'],
-            password=config['database']['password'],
-            database=config['database']['database']
+            host=db_config.get('host'),
+            port=db_config.get('port'),
+            user=db_config.get('user'),
+            password=db_config.get('password'),
+            database=db_config.get('database')
         )
 
+        bybit_config = config.get('bybit', {})
         self.trading_tool = BybitTradingTool(
-            api_key=config['bybit']['api_key'],
-            api_secret=config['bybit']['api_secret'],
-            demo_mode=config['bybit'].get('demo_mode', True)
+            api_key=bybit_config.get('api_key'),
+            api_secret=bybit_config.get('api_secret'),
+            demo_mode=bybit_config.get('demo_mode', True)
         )
 
         self.tools = [
