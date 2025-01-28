@@ -18,6 +18,17 @@ class ParserAgent(BaseAgent):
         llm_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize ParserAgent"""
+        # Initialize tools first
+        self.parser_tool = SignalParserTool()
+        self.telegram_tool = TelegramListenerTool(
+            api_id=telegram_config.get('api_id'),
+            api_hash=telegram_config.get('api_hash'),
+            session_token=telegram_config.get('session_token'),
+            channel_url=telegram_config.get('channel_url'),
+            message_callback=self.process_message  # Set callback to our method directly
+        )
+        
+        # Initialize base agent with tools
         super().__init__(
             name=name,
             role="Signal Parser",
@@ -26,55 +37,10 @@ class ParserAgent(BaseAgent):
             extracting trading signals, and validating their format and content. You ensure
             signals are properly formatted and contain all required information.""",
             llm_config=llm_config,
-            tools=[]
-        )
-
-        # Initialize tools
-        self.telegram_tool = TelegramListenerTool(
-            api_id=telegram_config.get('api_id'),
-            api_hash=telegram_config.get('api_hash'),
-            session_token=telegram_config.get('session_token'),
-            channel_url=telegram_config.get('channel_url'),
-            max_retries=telegram_config.get('max_retries'),
-            message_callback=message_callback
+            tools=[self.telegram_tool, self.parser_tool]
         )
         
-        self.parser_tool = SignalParserTool()
-        self.tools = [self.telegram_tool, self.parser_tool]
         self.message_callback = message_callback
-
-        # Initialize Crew AI components
-        self._setup_crew()
-
-    def _setup_crew(self):
-        """Setup Crew AI agents and tasks"""
-        self.signal_parser = Agent(
-            role="Signal Parser",
-            goal="Extract accurate trading signals from messages",
-            backstory="""You are an expert in analyzing trading signals from various sources.
-            You can identify key trading information and filter out noise.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.parser_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
-
-        self.signal_validator = Agent(
-            role="Signal Validator",
-            goal="Validate and enhance trading signals",
-            backstory="""You are a trading signal validator who ensures signals are accurate,
-            complete, and meaningful. You check for missing data and validate price levels.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.parser_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
-
-        self.crew = Crew(
-            agents=[self.signal_parser, self.signal_validator],
-            tasks=[],
-            verbose=True
-        )
 
     async def process_message(self, message_text: str):
         """Process incoming Telegram message"""

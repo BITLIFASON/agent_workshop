@@ -31,12 +31,13 @@ class BaseAgent:
         if not self.llm_provider:
             raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
-        # Create CrewAI agent
+    def _create_crew_agent(self):
+        """Create CrewAI agent with initialized tools"""
         self.agent = Agent(
-            name=name,
-            role=role,
-            goal=goal,
-            backstory=backstory,
+            name=self.name,
+            role=self.role,
+            goal=self.goal,
+            backstory=self.backstory,
             llm=self.llm_provider.get_crew_llm(temperature=self.llm_config.get("temperature", 0.7)),
             tools=self.tools,
             verbose=True
@@ -58,6 +59,7 @@ class BaseAgent:
             if not await self.llm_provider.initialize():
                 logger.error("Failed to initialize LLM provider")
                 return False
+            self._create_crew_agent()  # Create CrewAI agent after tools are initialized
             return True
         except Exception as e:
             logger.error(f"Error initializing agent {self.name}: {e}")

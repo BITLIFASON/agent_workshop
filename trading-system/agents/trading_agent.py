@@ -16,6 +16,14 @@ class TradingAgent(BaseAgent):
         llm_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize TradingAgent"""
+        # Initialize trading tool first
+        self.trading_tool = BybitTradingTool(
+            api_key=bybit_config.get('api_key'),
+            api_secret=bybit_config.get('api_secret'),
+            demo_mode=bybit_config.get('demo_mode', True)
+        )
+
+        # Initialize base agent with tools
         super().__init__(
             name=name,
             role="Trading Executor",
@@ -24,16 +32,8 @@ class TradingAgent(BaseAgent):
             on the Bybit exchange. You ensure trades are executed with proper parameters and
             monitor their execution status.""",
             llm_config=llm_config,
-            tools=[]
+            tools=[self.trading_tool]
         )
-
-        # Initialize trading tool
-        self.trading_tool = BybitTradingTool(
-            api_key=bybit_config.get('api_key'),
-            api_secret=bybit_config.get('api_secret'),
-            demo_mode=bybit_config.get('demo_mode', True)
-        )
-        self.tools = [self.trading_tool]
 
         # Initialize Crew AI components
         self._setup_crew()

@@ -21,17 +21,8 @@ class BalanceControlAgent(BaseAgent):
         **kwargs
     ):
         """Initialize BalanceControlAgent"""
-        super().__init__(
-            name=name,
-            role="Balance Controller",
-            goal="Monitor and control trading balance",
-            backstory="I am responsible for managing trading balances and ensuring compliance with system limits",
-            llm_config=llm_config,
-            **kwargs
-        )
-
-        # Initialize tools
-        management_config = config.get('management_service', {})
+        # Initialize tools first
+        management_config = config.get('management_api', {})
         self.management_tool = ManagementServiceTool(
             host=management_config.get('host'),
             port=management_config.get('port'),
@@ -54,11 +45,15 @@ class BalanceControlAgent(BaseAgent):
             demo_mode=bybit_config.get('demo_mode', True)
         )
 
-        self.tools = [
-            self.management_tool,
-            self.db_tool,
-            self.trading_tool
-        ]
+        # Initialize base agent with tools
+        super().__init__(
+            name=name,
+            role="Balance Controller",
+            goal="Monitor and control trading balance",
+            backstory="I am responsible for managing trading balances and ensuring compliance with system limits",
+            llm_config=llm_config,
+            tools=[self.management_tool, self.db_tool, self.trading_tool]
+        )
 
         self.trading_callback = trading_callback
 
