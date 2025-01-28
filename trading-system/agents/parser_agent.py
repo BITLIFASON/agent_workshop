@@ -41,6 +41,7 @@ class ParserAgent(BaseAgent):
         
         self.parser_tool = SignalParserTool()
         self.tools = [self.telegram_tool, self.parser_tool]
+        self.message_callback = message_callback
 
         # Initialize Crew AI components
         self._setup_crew()
@@ -78,10 +79,6 @@ class ParserAgent(BaseAgent):
     async def process_message(self, message_text: str):
         """Process incoming Telegram message"""
         try:
-            if not self.state.is_active:
-                logger.warning("Agent not active, skipping message processing")
-                return
-
             logger.info(f"Processing message: {message_text}")
 
             # Parse signal using parser tool
@@ -91,23 +88,20 @@ class ParserAgent(BaseAgent):
                 logger.warning("Failed to parse message as trading signal")
                 return
 
-            # Update agent state
-            self.state.last_action = f"Parsed {signal.action} signal for {signal.symbol}"
-
             # Validate signal timing
             if self._is_signal_valid(signal):
                 # Convert to dict and add timestamp
                 signal_dict = signal.model_dump()
                 signal_dict["timestamp"] = signal.timestamp
                 
-                await self.message_callback(signal_dict)
-                logger.info(f"Signal processed: {signal_dict}")
+                if self.message_callback:
+                    await self.message_callback(signal_dict)
+                    logger.info(f"Signal processed: {signal_dict}")
             else:
                 logger.warning(f"Signal outdated: {signal}")
 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
-            self.state.last_error = str(e)
 
     def _is_signal_valid(self, signal: SignalData) -> bool:
         """Check if the signal is still valid based on timing"""
