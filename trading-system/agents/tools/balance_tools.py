@@ -14,34 +14,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class DatabaseConfig(BaseModel):
-    """Configuration for Database"""
-    host: str = Field(..., description="Database host")
-    port: str = Field(..., description="Database port")
-    user: str = Field(..., description="Database user")
-    password: str = Field(..., description="Database password")
-    database: str = Field(..., description="Database name")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-    @field_validator("port")
-    def validate_port(cls, v: str) -> str:
-        try:
-            port = int(v)
-            if not 1 <= port <= 65535:
-                raise ValueError("Port must be between 1 and 65535")
-        except ValueError:
-            raise ValueError("Port must be a valid number")
-        return v
-
-
 class DatabaseOperationInput(BaseModel):
     """Input schema for DatabaseTool"""
     operation: str = Field(
-        ..., 
+        str,
         description="Operation to perform (get_active_lots, create_lot, delete_lot, create_history_lot)"
     )
     symbol: Optional[str] = Field(None, description="Trading pair symbol")
@@ -54,42 +30,6 @@ class DatabaseOperationInput(BaseModel):
         frozen=True
     )
 
-    @field_validator("operation")
-    def validate_operation(cls, v: str) -> str:
-        valid_operations = [
-            "get_active_lots",
-            "create_lot",
-            "delete_lot",
-            "create_history_lot"
-        ]
-        if v not in valid_operations:
-            raise ValueError(f"Invalid operation. Must be one of: {', '.join(valid_operations)}")
-        return v
-
-    @field_validator("symbol")
-    def validate_symbol(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            if not v.endswith("USDT"):
-                raise ValueError("Symbol must end with USDT")
-            if len(v) < 5:
-                raise ValueError("Invalid symbol length")
-            return v.upper()
-        return v
-
-    @field_validator("qty", "price")
-    def validate_numbers(cls, v: Optional[float]) -> Optional[float]:
-        if v is not None and v <= 0:
-            raise ValueError("Value must be greater than 0")
-        return v
-
-    @field_validator("action")
-    def validate_action(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            if v.lower() not in ["buy", "sell"]:
-                raise ValueError("Action must be either 'buy' or 'sell'")
-            return v.lower()
-        return v
-
 
 class DatabaseTool(BaseTool):
     """Tool for database operations.
@@ -101,11 +41,11 @@ class DatabaseTool(BaseTool):
     description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
     pool: Optional[asyncpg.Pool] = Field(default=None, description="Database connection pool")
-    host: str = Field(..., description="Database host")
-    port: str = Field(..., description="Database port")
-    user: str = Field(..., description="Database user")
-    password: str = Field(..., description="Database password")
-    database: str = Field(..., description="Database name")
+    host: str = Field(str, description="Database host")
+    port: str = Field(str, description="Database port")
+    user: str = Field(str, description="Database user")
+    password: str = Field(str, description="Database password")
+    database: str = Field(str, description="Database name")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -162,7 +102,7 @@ class DatabaseTool(BaseTool):
             async with self.pool.acquire() as conn:
                 await conn.execute(
                     """
-                    INSERT INTO lots (symbol, qty, price, created_at)
+                    INSERT INTO active_lots (symbol, qty, price, created_at)
                     VALUES ($1, $2, $3, NOW())
                     """,
                     symbol, qty, price
@@ -178,7 +118,7 @@ class DatabaseTool(BaseTool):
             async with self.pool.acquire() as conn:
                 lots = await conn.fetch(
                     """
-                    SELECT * FROM lots
+                    SELECT * FROM active_lots
                     WHERE symbol = $1
                     ORDER BY created_at ASC
                     """,
@@ -195,7 +135,7 @@ class DatabaseTool(BaseTool):
             async with self.pool.acquire() as conn:
                 await conn.execute(
                     """
-                    DELETE FROM lots
+                    DELETE FROM active_lots
                     WHERE symbol = $1
                     """,
                     symbol
@@ -212,22 +152,10 @@ class DatabaseTool(BaseTool):
             self.pool = None
 
 
-class ManagementServiceConfig(BaseModel):
-    """Configuration for Management Service"""
-    host: str = Field(..., description="Management service host")
-    port: str = Field(..., description="Management service port")
-    token: str = Field(..., description="Management service token")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
 class ManagementServiceInput(BaseModel):
     """Input schema for ManagementServiceTool"""
     operation: str = Field(
-        ..., 
+        str,
         description="Operation to perform (get_system_status, get_price_limit, get_fake_balance, get_num_available_lots)"
     )
 
@@ -235,18 +163,6 @@ class ManagementServiceInput(BaseModel):
         validate_assignment=True,
         frozen=True
     )
-
-    @field_validator("operation")
-    def validate_operation(cls, v: str) -> str:
-        valid_operations = [
-            "get_system_status",
-            "get_price_limit",
-            "get_fake_balance",
-            "get_num_available_lots"
-        ]
-        if v not in valid_operations:
-            raise ValueError(f"Invalid operation. Must be one of: {', '.join(valid_operations)}")
-        return v
 
 
 class ManagementServiceTool(BaseTool):
@@ -259,10 +175,10 @@ class ManagementServiceTool(BaseTool):
     name: str = "management_service"
     description: str = "Tool for interacting with Management Service"
     args_schema: Type[BaseModel] = ManagementServiceInput
-    host: str = Field(..., description="Management service host")
-    port: str = Field(..., description="Management service port")
-    token: str = Field(..., description="Management service token")
     session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
+    host: str = Field(str, description="Management service host")
+    port: str = Field(str, description="Management service port")
+    token: str = Field(str, description="Management service token")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -350,7 +266,7 @@ class BybitOperationParams(BaseModel):
 
 class BybitTradingInput(BaseModel):
     """Input schema for BybitTradingTool"""
-    operation: str = Field(..., description="Operation to perform")
+    operation: str = Field(str, description="Operation to perform")
     params: BybitOperationParams = Field(default_factory=BybitOperationParams)
 
 
@@ -361,9 +277,6 @@ class BybitTradingTool(BaseTool):
     args_schema: Type[BaseModel] = BybitTradingInput
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
-    api_key: str = Field(..., description="Bybit API key")
-    api_secret: str = Field(..., description="Bybit API secret")
-    demo_mode: bool = Field(default=True, description="Whether to use testnet")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -376,9 +289,6 @@ class BybitTradingTool(BaseTool):
     ):
         """Initialize BybitTradingTool"""
         super().__init__(**kwargs)
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.demo_mode = demo_mode
         self.client = HTTP(
             testnet=demo_mode,
             api_key=api_key,
@@ -435,7 +345,7 @@ class BybitTradingTool(BaseTool):
 
 class BalanceOperationSchema(BaseModel):
     """Input schema for BalanceServiceTool"""
-    operation: str = Field(..., description="Operation to perform (get_balance, update_balance)")
+    operation: str = Field(str, description="Operation to perform (get_balance, update_balance)")
     amount: Optional[float] = Field(None, description="Amount to update balance by")
 
 

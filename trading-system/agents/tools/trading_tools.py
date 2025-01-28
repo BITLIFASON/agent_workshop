@@ -6,10 +6,10 @@ from crewai.tools import BaseTool
 
 class CoinInfo(BaseModel):
     """Model for coin information"""
-    max_qty: float = Field(..., description="Maximum order quantity")
-    min_qty: float = Field(..., description="Minimum order quantity")
-    step_qty: str = Field(..., description="Step size for quantity")
-    min_order_usdt: int = Field(..., description="Minimum order size in USDT")
+    max_qty: float = Field(float, description="Maximum order quantity")
+    min_qty: float = Field(float, description="Minimum order quantity")
+    step_qty: str = Field(str, description="Step size for quantity")
+    min_order_usdt: int = Field(int, description="Minimum order size in USDT")
     extra_params: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(
@@ -17,52 +17,20 @@ class CoinInfo(BaseModel):
         frozen=True
     )
 
-    @field_validator("max_qty", "min_qty")
-    def validate_qty(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Quantity must be greater than 0")
-        return v
-
-    @field_validator("min_order_usdt")
-    def validate_min_order(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("Minimum order size must be greater than 0")
-        return v
-
 
 class OrderResult(BaseModel):
     """Model for order execution results"""
-    order_id: str = Field(..., description="Order ID")
-    symbol: str = Field(..., description="Trading pair symbol")
-    side: str = Field(..., description="Order side (Buy/Sell)")
-    qty: float = Field(..., description="Order quantity")
-    price: float = Field(..., description="Order price")
-    status: str = Field(..., description="Order status")
+    order_id: str = Field(str, description="Order ID")
+    symbol: str = Field(str, description="Trading pair symbol")
+    side: str = Field(str, description="Order side (Buy/Sell)")
+    qty: float = Field(float, description="Order quantity")
+    price: float = Field(float, description="Order price")
+    status: str = Field(str, description="Order status")
 
     model_config = ConfigDict(
         validate_assignment=True,
         frozen=True
     )
-
-    @field_validator("symbol")
-    def validate_symbol(cls, v: str) -> str:
-        if not v.endswith("USDT"):
-            raise ValueError("Symbol must end with USDT")
-        if len(v) < 5:
-            raise ValueError("Invalid symbol length")
-        return v.upper()
-
-    @field_validator("side")
-    def validate_side(cls, v: str) -> str:
-        if v.lower() not in ["buy", "sell"]:
-            raise ValueError("Side must be either 'Buy' or 'Sell'")
-        return v.capitalize()
-
-    @field_validator("qty", "price")
-    def validate_numbers(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("Value must be greater than 0")
-        return v
 
 
 class TradingOperationInput(BaseModel):
@@ -80,54 +48,14 @@ class TradingOperationInput(BaseModel):
         frozen=True
     )
 
-    @field_validator("operation")
-    def validate_operation(cls, v: str) -> str:
-        valid_operations = [
-            "get_wallet_balance",
-            "get_coin_balance",
-            "get_coin_info",
-            "place_order",
-            "get_market_price"
-        ]
-        if v not in valid_operations:
-            raise ValueError(f"Invalid operation. Must be one of: {', '.join(valid_operations)}")
-        return v
-
-    @field_validator("symbol")
-    def validate_symbol(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            if not v.endswith("USDT"):
-                raise ValueError("Symbol must end with USDT")
-            if len(v) < 5:
-                raise ValueError("Invalid symbol length")
-            return v.upper()
-        return v
-
-    @field_validator("side")
-    def validate_side(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            if v.lower() not in ["buy", "sell"]:
-                raise ValueError("Side must be either 'Buy' or 'Sell'")
-            return v.capitalize()
-        return v
-
-    @field_validator("qty")
-    def validate_qty(cls, v: Optional[float]) -> Optional[float]:
-        if v is not None and v <= 0:
-            raise ValueError("Quantity must be greater than 0")
-        return v
-
 
 class BybitTradingTool(BaseTool):
     """Tool for executing trades on Bybit exchange"""
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
+    args_schema: Type[BaseModel] = TradingOperationInput
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
-    api_key: str = Field(..., description="Bybit API key")
-    api_secret: str = Field(..., description="Bybit API secret")
-    demo_mode: bool = Field(default=True, description="Whether to use testnet")
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(
