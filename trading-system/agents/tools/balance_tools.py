@@ -92,10 +92,20 @@ class DatabaseOperationInput(BaseModel):
 
 
 class DatabaseTool(BaseTool):
-    """Tool for database operations"""
+    """Tool for database operations.
+    
+    This tool provides functionality to interact with the database,
+    including managing lots, historical data, and other trading records.
+    """
     name: str = "database"
     description: str = "Tool for database operations"
+    args_schema: Type[BaseModel] = DatabaseOperationInput
     pool: Optional[asyncpg.Pool] = Field(default=None, description="Database connection pool")
+    host: str = Field(..., description="Database host")
+    port: str = Field(..., description="Database port")
+    user: str = Field(..., description="Database user")
+    password: str = Field(..., description="Database password")
+    database: str = Field(..., description="Database name")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -240,9 +250,15 @@ class ManagementServiceInput(BaseModel):
 
 
 class ManagementServiceTool(BaseTool):
-    """Tool for interacting with Management Service"""
+    """Tool for interacting with Management Service.
+    
+    This tool provides functionality to interact with the management service,
+    including system status checks, price limit verification, and other
+    management operations.
+    """
     name: str = "management_service"
     description: str = "Tool for interacting with Management Service"
+    args_schema: Type[BaseModel] = ManagementServiceInput
     session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
     host: str = Field(..., description="Management service host")
     port: str = Field(..., description="Management service port")
@@ -339,20 +355,34 @@ class BybitTradingInput(BaseModel):
 
 
 class BybitTradingTool(BaseTool):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    """Tool for executing trades on Bybit exchange"""
     name: str = "bybit_trading"
     description: str = "Tool for executing trades on Bybit"
     args_schema: Type[BaseModel] = BybitTradingInput
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
+    api_key: str = Field(..., description="Bybit API key")
+    api_secret: str = Field(..., description="Bybit API secret")
+    demo_mode: bool = Field(default=True, description="Whether to use testnet")
 
-    def __init__(self, config: Dict[str, str]):
-        super().__init__(name=self.name, description=self.description)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        demo_mode: bool = True,
+        **kwargs
+    ):
+        """Initialize BybitTradingTool"""
+        super().__init__(**kwargs)
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.demo_mode = demo_mode
         self.client = HTTP(
-            testnet=False,
-            api_key=config['api_key'],
-            api_secret=config['api_secret'],
-            demo=config.get('demo_mode', 'True') == 'True'
+            testnet=demo_mode,
+            api_key=api_key,
+            api_secret=api_secret
         )
         self.logger = logger
 

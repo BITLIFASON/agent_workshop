@@ -65,13 +65,24 @@ class SignalParserInput(BaseModel):
 
 
 class SignalParserTool(BaseTool):
-    """Tool for parsing trading signals from text messages"""
+    """Tool for parsing trading signals from text messages.
+    
+    This tool is responsible for parsing and validating trading signals
+    from text messages in specific formats. It handles both buy and sell
+    signals with their respective parameters.
+    
+    Handles two specific formats:
+    Buy: ⬆️ SYMBOL BUY LONG PRICE: X.XXXX
+    Sell: ✔️ SYMBOL 🟢 PROFIT: +/-XX.XX% CLOSE LONG PRICE: X.XXXX
+    """
     name: str = "signal_parser"
     description: str = """Parse trading signals from text messages.
     Handles two specific formats:
     Buy: ⬆️ SYMBOL BUY LONG PRICE: X.XXXX
     Sell: ✔️ SYMBOL 🟢 PROFIT: +/-XX.XX% CLOSE LONG PRICE: X.XXXX"""
     args_schema: Type[BaseModel] = SignalParserInput
+    buy_pattern: re.Pattern = Field(default=None, description="Regex pattern for buy signals")
+    sell_pattern: re.Pattern = Field(default=None, description="Regex pattern for sell signals")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -155,12 +166,20 @@ class TelegramConfig(BaseModel):
 
 
 class TelegramListenerTool(BaseTool):
-    """Tool for listening to Telegram messages"""
+    """Tool for listening to Telegram messages.
+    
+    This tool provides functionality to connect to Telegram and listen
+    for messages in specified channels. It handles message reception
+    and forwards them to the appropriate callback for processing.
+    """
     name: str = "telegram_listener"
     description: str = "Tool for listening to Telegram messages"
     client: Optional[TelegramClient] = Field(default=None, description="Telegram client")
-    channel_url: str = Field(default="", description="Channel URL to listen to")
+    channel_url: str = Field(..., description="Channel URL to listen to")
     message_callback: Optional[Callable] = Field(default=None, description="Callback for new messages")
+    api_id: int = Field(..., description="Telegram API ID")
+    api_hash: str = Field(..., description="Telegram API hash")
+    session_token: str = Field(..., description="Session token")
     
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
