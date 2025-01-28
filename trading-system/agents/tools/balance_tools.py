@@ -259,10 +259,10 @@ class ManagementServiceTool(BaseTool):
     name: str = "management_service"
     description: str = "Tool for interacting with Management Service"
     args_schema: Type[BaseModel] = ManagementServiceInput
-    session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
     host: str = Field(..., description="Management service host")
     port: str = Field(..., description="Management service port")
     token: str = Field(..., description="Management service token")
+    session: Optional[aiohttp.ClientSession] = Field(default=None, description="HTTP session")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -452,12 +452,7 @@ class BalanceServiceTool(BaseTool):
         **kwargs
     ):
         """Initialize BalanceServiceTool."""
-        super().__init__(
-            name=kwargs.get("name", "balance_service"),
-            description=kwargs.get("description", "Tool for managing agent balance"),
-            args_schema=kwargs.get("args_schema", BalanceOperationSchema),
-            **kwargs
-        )
+        super().__init__(**kwargs)
         self.balance = initial_balance
 
     def _run(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
