@@ -122,10 +122,7 @@ class TradingSystem:
             # Create Parser Agent last since it depends on Balance Control Agent
             self.parser_agent = ParserAgent(
                 name="signal_parser",
-                api_id=self.config.telegram.api_id,
-                api_hash=self.config.telegram.api_hash,
-                api_session_token=self.config.telegram.session_token,
-                channel_url=self.config.telegram.channel_url,
+                telegram_config=self.config.telegram.model_dump(),
                 message_callback=self.process_signal,
                 llm_config=self.config.llm.model_dump()
             )

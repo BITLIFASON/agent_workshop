@@ -13,10 +13,7 @@ class ParserAgent(BaseAgent):
     def __init__(
         self,
         name: str,
-        api_id: int,
-        api_hash: str,
-        api_session_token: str,
-        channel_url: str,
+        telegram_config: Dict[str, Any],
         message_callback: Optional[Callable] = None,
         llm_config: Optional[Dict[str, Any]] = None
     ):
@@ -34,10 +31,10 @@ class ParserAgent(BaseAgent):
 
         # Initialize tools
         self.telegram_tool = TelegramListenerTool(
-            api_id=api_id,
-            api_hash=api_hash,
-            session_token=api_session_token,
-            channel_url=channel_url,
+            api_id=telegram_config.get('api_id'),
+            api_hash=telegram_config.get('api_hash'),
+            session_token=telegram_config.get('session_token'),
+            channel_url=telegram_config.get('channel_url'),
             message_callback=message_callback
         )
         
