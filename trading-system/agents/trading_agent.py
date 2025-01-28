@@ -35,21 +35,16 @@ class TradingAgent(BaseAgent):
             tools=[self.trading_tool]
         )
 
-        # Initialize Crew AI components
-        self._setup_crew()
-
-    def _setup_crew(self):
-        """Setup Crew AI agents and tasks"""
-        self.trade_executor = Agent(
-            role="Trade Executor",
-            goal="Execute trades accurately and efficiently",
-            backstory="""You are responsible for executing trades on the exchange.
-            You ensure trades are executed with proper parameters and monitor their status.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.trading_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
+    async def initialize(self) -> bool:
+        """Initialize agent and its tools"""
+        try:
+            logger.info(f"Initializing {self.name}")
+            if not await super().initialize():
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing {self.name}: {e}")
+            return False
 
     async def execute_trade(self, signal_data: Dict[str, Any]) -> bool:
         """Execute trade based on signal"""
@@ -84,15 +79,6 @@ class TradingAgent(BaseAgent):
 
         except Exception as e:
             logger.error(f"Error executing trade in {self.name}: {e}")
-            return False
-
-    async def initialize(self) -> bool:
-        """Initialize agent and its tools"""
-        try:
-            logger.info(f"Initializing {self.name}")
-            return True
-        except Exception as e:
-            logger.error(f"Error initializing {self.name}: {e}")
             return False
 
     async def run(self):

@@ -57,51 +57,16 @@ class BalanceControlAgent(BaseAgent):
 
         self.trading_callback = trading_callback
 
-        # Initialize Crew AI components
-        self._setup_crew()
-
-    def _setup_crew(self):
-        """Setup Crew AI agents and tasks"""
-        self.system_monitor = Agent(
-            role="System Monitor",
-            goal="Monitor system status and validate trading conditions",
-            backstory="""You are responsible for monitoring the trading system's status,
-            checking price limits, fake balance, and available lots. You ensure all
-            trading conditions are met before allowing a trade.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.management_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
-
-        self.trade_analyzer = Agent(
-            role="Trade Analyzer",
-            goal="Analyze trades and calculate optimal position sizes",
-            backstory="""You are a trading specialist who analyzes trades and determines
-            optimal position sizes based on system constraints, fake balance, and available lots.
-            You use the Bybit API to get symbol information and calculate quantities.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.trading_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
-
-        self.db_manager = Agent(
-            role="Database Manager",
-            goal="Manage trading records and history",
-            backstory="""You are responsible for maintaining accurate records of
-            all trading activities, lots, and historical data.""",
-            verbose=True,
-            allow_delegation=False,
-            tools=[self.db_tool],
-            llm=self.llm_provider.get_crew_llm(temperature=0.7)
-        )
-
-        self.crew = Crew(
-            agents=[self.system_monitor, self.trade_analyzer, self.db_manager],
-            tasks=[],
-            verbose=True
-        )
+    async def initialize(self) -> bool:
+        """Initialize agent and its tools"""
+        try:
+            logger.info(f"Initializing {self.name}")
+            if not await super().initialize():
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Error initializing {self.name}: {e}")
+            return False
 
     async def process_signal(self, signal_data: Dict[str, Any]) -> bool:
         """Process trading signal"""
@@ -136,15 +101,6 @@ class BalanceControlAgent(BaseAgent):
 
         except Exception as e:
             logger.error(f"Error processing signal in {self.name}: {e}")
-            return False
-
-    async def initialize(self) -> bool:
-        """Initialize agent and its tools"""
-        try:
-            logger.info(f"Initializing {self.name}")
-            return True
-        except Exception as e:
-            logger.error(f"Error initializing {self.name}: {e}")
             return False
 
     async def run(self):
