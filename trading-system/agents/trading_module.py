@@ -88,9 +88,3 @@ def create_balance_controller_agent(
         llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
         verbose=True
     )
-
-async def cleanup_trading_tools(agent: Agent):
-    """Cleanup trading module tools"""
-    for tool in agent.tools:
-        if hasattr(tool, 'cleanup'):
-            await tool.cleanup() 

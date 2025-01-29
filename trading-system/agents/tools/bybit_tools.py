@@ -3,41 +3,7 @@ from pybit.unified_trading import HTTP
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 from loguru import logger
-
-
-class CoinInfo(BaseModel):
-    """Model for coin information"""
-    max_qty: float = Field(float, description="Maximum order quantity")
-    min_qty: float = Field(float, description="Minimum order quantity")
-    step_qty: str = Field(str, description="Step size for quantity")
-    min_order_usdt: int = Field(int, description="Minimum order size in USDT")
-    extra_params: Dict[str, Any] = Field(default_factory=dict)
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class OrderResult(BaseModel):
-    """Model for order execution results"""
-    order_id: str = Field(str, description="Order ID")
-    symbol: str = Field(str, description="Trading pair symbol")
-    side: str = Field(str, description="Order side (Buy/Sell)")
-    qty: float = Field(float, description="Order quantity")
-    price: float = Field(float, description="Order price")
-    status: str = Field(str, description="Order status")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class BybitOperationInput(BaseModel):
-    """Base input model for Bybit operations"""
-    operation: str = Field(default="", description="Operation to perform")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Operation parameters")
+from ..utils.models import BybitOperationInput, CoinInfo, OrderResult
 
 
 class BybitBalanceTool(BaseTool):

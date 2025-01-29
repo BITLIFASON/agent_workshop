@@ -7,7 +7,6 @@ from .signal_module import create_signal_parser_agent, cleanup_signal_tools
 from .trading_module import (
     create_trading_executor_agent,
     create_balance_controller_agent,
-    cleanup_trading_tools
 )
 
 
@@ -169,12 +168,7 @@ class TradingSystem:
         """Shutdown the trading system"""
         try:
             logger.info("Shutting down trading system...")
-            
-            # Cleanup agents in reverse order of initialization
-            await cleanup_signal_tools(self.parser_agent)
-            await cleanup_trading_tools(self.balance_control_agent)
-            await cleanup_trading_tools(self.trading_agent)
-            
+
             logger.info("Trading system shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")

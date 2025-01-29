@@ -1,5 +1,4 @@
 from typing import Dict, Any, Optional, List, Type, Callable
-from datetime import datetime
 import re
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
@@ -7,31 +6,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from loguru import logger
 from crewai.tools import BaseTool
 import asyncio
-import os
-
-
-class SignalData(BaseModel):
-    """Model for parsed trading signals"""
-    symbol: str = Field(str, description="Trading pair symbol (e.g., 'MINAUSDT')")
-    action: str = Field(str, description="Trading action ('buy' or 'sell')")
-    price: float = Field(float, description="Entry or exit price for the trade")
-    profit_percentage: Optional[float] = Field(None, description="Profit percentage for sell signals")
-    timestamp: datetime = Field(default_factory=datetime.now)
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class SignalParserInput(BaseModel):
-    """Input schema for SignalParserTool"""
-    message: str = Field(str, description="Message text to parse for trading signals")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
+from ..utils.models import SignalData, SignalParserInput
 
 
 class SignalParserTool(BaseTool):
