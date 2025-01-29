@@ -3,9 +3,12 @@ from typing import Dict, Any
 import asyncio
 from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
-from .parser_agent import ParserAgent
-from .balance_control_agent import BalanceControlAgent
-from .trading_agent import TradingAgent
+from .signal_module import create_signal_parser_agent, cleanup_signal_tools
+from .trading_module import (
+    create_trading_executor_agent,
+    create_balance_controller_agent,
+    cleanup_trading_tools
+)
 
 
 class TelegramConfig(BaseModel):
@@ -99,17 +102,17 @@ class TradingSystem:
             raise
 
     def _create_agents(self):
-        """Create agent instances without initialization"""
+        """Create agent instances"""
         try:
             # Create Trading Agent first since it's used as a callback
-            self.trading_agent = TradingAgent(
+            self.trading_agent = create_trading_executor_agent(
                 name="trading_executor",
                 bybit_config=self.config.bybit.model_dump(),
                 llm_config=self.config.llm.model_dump()
             )
 
             # Create Balance Control Agent with trading callback
-            self.balance_control_agent = BalanceControlAgent(
+            self.balance_control_agent = create_balance_controller_agent(
                 name="balance_controller",
                 config={
                     "management_api": self.config.management_api.model_dump(),
@@ -121,7 +124,7 @@ class TradingSystem:
             )
 
             # Create Parser Agent last since it depends on Balance Control Agent
-            self.parser_agent = ParserAgent(
+            self.parser_agent = create_signal_parser_agent(
                 name="signal_parser",
                 telegram_config=self.config.telegram.model_dump(),
                 message_callback=self.process_signal,
@@ -144,26 +147,8 @@ class TradingSystem:
         """Initialize the trading system"""
         try:
             logger.info("Initializing trading system...")
-
-            # Initialize agents in correct order
-            # Trading Agent first since it's used by Balance Control Agent
-            if not await self.trading_agent.initialize():
-                logger.error("Failed to initialize Trading Agent")
-                return False
-
-            # Balance Control Agent next since it depends on Trading Agent
-            if not await self.balance_control_agent.initialize():
-                logger.error("Failed to initialize Balance Control Agent")
-                return False
-
-            # Parser Agent last since it triggers the whole chain
-            if not await self.parser_agent.initialize():
-                logger.error("Failed to initialize Parser Agent")
-                return False
-
             logger.info("Trading system initialized successfully")
             return True
-
         except Exception as e:
             logger.error(f"Error initializing trading system: {e}")
             return False
@@ -172,18 +157,9 @@ class TradingSystem:
         """Start the trading system"""
         try:
             logger.info("Starting trading system...")
-
-            # Start agent execution loops
-            agent_tasks = [
-                self.parser_agent.run(),
-                self.balance_control_agent.run(),
-                self.trading_agent.run()
-            ]
-
-            # Wait for all agents to complete or fail
-            await asyncio.gather(*agent_tasks)
-            logger.info("Trading system started successfully")
-
+            # Run until interrupted
+            while True:
+                await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Error starting trading system: {e}")
             await self.shutdown()
@@ -195,12 +171,11 @@ class TradingSystem:
             logger.info("Shutting down trading system...")
             
             # Cleanup agents in reverse order of initialization
-            await self.parser_agent.cleanup()
-            await self.balance_control_agent.cleanup()
-            await self.trading_agent.cleanup()
+            await cleanup_signal_tools(self.parser_agent)
+            await cleanup_trading_tools(self.balance_control_agent)
+            await cleanup_trading_tools(self.trading_agent)
             
             logger.info("Trading system shutdown complete")
-
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
             raise

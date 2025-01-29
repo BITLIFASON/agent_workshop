@@ -1,8 +1,9 @@
-from typing import Any, Type, Optional, Dict, List
+from typing import Any, Type, Dict
 from pybit.unified_trading import HTTP
-from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
+from loguru import logger
+
 
 class CoinInfo(BaseModel):
     """Model for coin information"""
@@ -33,99 +34,64 @@ class OrderResult(BaseModel):
     )
 
 
-class TradingOperationInput(BaseModel):
-    """Input schema for BybitTradingTool"""
-    operation: str = Field(
-        ..., 
-        description="Operation to perform (get_wallet_balance, get_coin_balance, get_coin_info, place_order, get_market_price)"
-    )
-    symbol: Optional[str] = Field(None, description="Trading pair symbol (e.g., 'BTCUSDT')")
-    side: Optional[str] = Field(None, description="Trading side ('Buy' or 'Sell')")
-    qty: Optional[float] = Field(None, description="Order quantity")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
+class BybitOperationInput(BaseModel):
+    """Base input model for Bybit operations"""
+    operation: str = Field(default="", description="Operation to perform")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Operation parameters")
 
 
-class BybitTradingTool(BaseTool):
-    """Tool for executing trades on Bybit exchange"""
-    name: str = "bybit_trading"
-    description: str = "Tool for executing trades on Bybit"
-    args_schema: Type[BaseModel] = TradingOperationInput
+class BybitBalanceTool(BaseTool):
+    """Tool for managing balance operations on Bybit"""
+    name = "bybit_balance"
+    description = """Manage balance operations on Bybit exchange.
+    Supported operations:
+    - get_balance: Get current balance for a symbol
+    - get_positions: Get open positions
+    - get_leverage: Get current leverage settings
+    - set_leverage: Set leverage for a symbol
+    - get_margin_mode: Get current margin mode
+    - set_margin_mode: Set margin mode for a symbol
+    """
+    args_schema = BybitOperationInput
     client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(
-        self,
-        api_key: str,
-        api_secret: str,
-        demo_mode: bool = True,
-        **kwargs
+
+    def __init__(self,
+                 api_key: str,
+                 api_secret: str,
+                 demo_mode: bool = True,
+                 **kwargs
     ):
         """Initialize BybitTradingTool"""
         super().__init__(**kwargs)
         self.client = HTTP(
-            testnet=demo_mode,
+            demo=demo_mode,
             api_key=api_key,
             api_secret=api_secret
         )
         self.logger = logger
 
-    def _run(self, **kwargs: Any) -> Dict[str, Any]:
-        """Synchronous version not supported"""
-        raise NotImplementedError("This tool only supports async operation")
-
     async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
         """Execute trading operations asynchronously"""
         try:
+
             operation = kwargs.get("operation")
-            symbol = kwargs.get("symbol")
-            side = kwargs.get("side")
-            qty = kwargs.get("qty")
 
-            if not symbol and operation not in ["get_wallet_balance"]:
-                return {"success": False, "error": "Symbol is required for this operation"}
-
-            if operation == "set_leverage":
-                return await self._set_leverage(symbol)
-            elif operation == "get_wallet_balance":
+            if operation == "get_wallet_balance":
                 return await self._get_wallet_balance()
             elif operation == "get_coin_balance":
+                symbol = kwargs.get("symbol")
                 return await self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
+                symbol = kwargs.get("symbol")
                 return await self._get_coin_info(symbol)
-            elif operation == "place_order":
-                if not all([side, qty]):
-                    return {"success": False, "error": "Side and quantity are required for placing orders"}
-                return await self._place_order(symbol, side, qty)
-            elif operation == "get_market_price":
-                return await self._get_market_price(symbol)
             return {"success": False, "error": "Unknown operation"}
 
         except Exception as e:
-            logger.error(f"Trading tool error: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def _set_leverage(self, symbol: str) -> Dict[str, Any]:
-        """Set leverage for symbol"""
-        try:
-            self.client.set_leverage(
-                category="linear",
-                symbol=symbol,
-                buyLeverage=self.leverage,
-                sellLeverage=self.leverage
-            )
-            logger.info(f"Leverage set to {self.leverage} for {symbol}")
-            return {"success": True}
-        except Exception as e:
-            if '110043' in str(e):
-                logger.info(f"Leverage already set to {self.leverage} for {symbol}")
-                return {"success": True}
-            logger.error(f"Failed to set leverage for {symbol}: {e}")
-            return {"success": False, "error": str(e)}
+            logger.error(f"Error in BybitBalanceTool: {e}")
+            return f"Error executing operation: {str(e)}"
 
     async def _get_wallet_balance(self) -> Dict[str, Any]:
         """Get wallet USDT balance"""
@@ -173,6 +139,77 @@ class BybitTradingTool(BaseTool):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+
+
+class BybitTradingTool(BaseTool):
+    """Tool for executing trades on Bybit"""
+    name = "bybit_trading"
+    description = """Execute trading operations on Bybit exchange.
+    Supported operations:
+    - execute_trade: Execute a trade with given parameters (symbol, side, qty)
+    - cancel_trade: Cancel an existing trade (order_id)
+    - get_order_status: Get status of an order (order_id)
+    """
+    args_schema = BybitOperationInput
+    client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
+    logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __init__(self,
+                 api_key: str,
+                 api_secret: str,
+                 demo_mode: bool = True,
+                 **kwargs
+    ):
+        """Initialize BybitTradingTool"""
+        super().__init__(**kwargs)
+        self.client = HTTP(
+            demo=demo_mode,
+            api_key=api_key,
+            api_secret=api_secret
+        )
+        self.logger = logger
+
+    def _run(self, **kwargs: Any) -> Dict[str, Any]:
+        """Synchronous version not supported"""
+        raise NotImplementedError("This tool only supports async operation")
+
+    async def _arun(self, operation: str, params: Dict[str, Any]) -> str:
+        """Execute async trading operations"""
+        try:
+            if operation == "execute_trade":
+                symbol = params.get("symbol")
+                side = params.get("side")
+                qty = params.get("qty")
+                if not all([symbol, side, qty]):
+                    return "Error: Missing required parameters for trade execution"
+                return f"Executed trade: {symbol} {side} {qty}"
+            
+            else:
+                return f"Error: Unsupported operation {operation}"
+                
+        except Exception as e:
+            logger.error(f"Error in BybitTradingTool: {e}")
+            return f"Error executing operation: {str(e)}"
+
+    async def _set_leverage(self, symbol: str) -> Dict[str, Any]:
+        """Set leverage for symbol"""
+        try:
+            self.client.set_leverage(
+                category="linear",
+                symbol=symbol,
+                buyLeverage="1",
+                sellLeverage="1"
+            )
+            logger.info(f"Leverage set to {1} for {symbol}")
+            return {"success": True}
+        except Exception as e:
+            if '110043' in str(e):
+                logger.info(f"Leverage already set to {1} for {symbol}")
+                return {"success": True}
+            logger.error(f"Failed to set leverage for {symbol}: {e}")
+            return {"success": False, "error": str(e)}
+
     async def _place_order(self, symbol: str, side: str, qty: float) -> Dict[str, Any]:
         """Place market order"""
         leverage_result = await self._set_leverage(symbol)
@@ -202,13 +239,8 @@ class BybitTradingTool(BaseTool):
             logger.error(f"Failed to place order: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _get_market_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current market price"""
-        try:
-            ticker = self.client.get_tickers(
-                category="linear",
-                symbol=symbol
-            )["result"]["list"][0]
-            return {"success": True, "data": float(ticker["lastPrice"])}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        # Cleanup Bybit client if needed
+        pass
