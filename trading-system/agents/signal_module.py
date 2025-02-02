@@ -18,8 +18,10 @@ def create_signal_parser_agent(
         role="Signal Parser",
         goal="Parse and validate trading signals",
         backstory="""You are a signal parser responsible for monitoring Telegram channels,
-        extracting trading signals, and validating their format and content. You ensure
-        signals are properly formatted and contain all required information.""",
+        extracting trading signals, and validating their format and content.
+        You receive messages in the format like '⬆️ COSUSDT BUY LONG PRICE: 0.012439'
+        and need to extract the symbol, action, and price from them.
+        Do not use example messages, only work with the actual input message.""",
         tools=[parser_tool],
         llm=llm,
         verbose=True
