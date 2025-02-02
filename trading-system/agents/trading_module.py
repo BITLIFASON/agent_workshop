@@ -44,7 +44,6 @@ def create_trading_executor_agent(
 def create_balance_controller_agent(
     name: str,
     config: Dict[str, Dict[str, Any]],
-    trading_callback: Optional[Callable] = None,
     llm_config: Optional[Dict[str, Any]] = None
 ) -> Agent:
     """Create balance controller agent"""

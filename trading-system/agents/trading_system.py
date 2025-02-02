@@ -120,7 +120,6 @@ class TradingSystem:
                     "database": self.config.database.model_dump(),
                     "bybit": self.config.bybit.model_dump()
                 },
-                trading_callback=self.trading_agent.execute_trade,
                 llm_config=self.config.llm.model_dump()
             )
 
@@ -144,6 +143,7 @@ class TradingSystem:
                 description="""Monitor Telegram channels for trading signals. 
                 Parse incoming messages and extract trading information.
                 Validate signal format and content.""",
+                expected_output="""Dict with parse signal params""",
                 agent=self.parser_agent
             )
 
@@ -151,6 +151,7 @@ class TradingSystem:
                 description="""Monitor and control trading balance.
                 Verify system status and price limits.
                 Manage trading lots and ensure compliance with system limits.""",
+                expected_output="""Dict with decision trade about symbol, side and quantity""",
                 agent=self.balance_control_agent
             )
 
@@ -158,6 +159,7 @@ class TradingSystem:
                 description="""Execute trades on the exchange.
                 Place and manage orders with proper parameters.
                 Monitor order execution status.""",
+                expected_output="""Dict with parameters order""",
                 agent=self.trading_agent
             )
 

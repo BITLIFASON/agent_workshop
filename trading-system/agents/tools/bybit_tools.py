@@ -8,8 +8,8 @@ from ..utils.models import BybitOperationInput, CoinInfo, OrderResult
 
 class BybitBalanceTool(BaseTool):
     """Tool for managing balance operations on Bybit"""
-    name = "bybit_balance"
-    description = """Manage balance operations on Bybit exchange.
+    name: str = "bybit_balance"
+    description: str = """Manage balance operations on Bybit exchange.
     Supported operations:
     - get_balance: Get current balance for a symbol
     - get_positions: Get open positions
@@ -18,8 +18,8 @@ class BybitBalanceTool(BaseTool):
     - get_margin_mode: Get current margin mode
     - set_margin_mode: Set margin mode for a symbol
     """
-    args_schema = BybitOperationInput
-    client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
+    args_schema: Type[BaseModel] = BybitOperationInput
+    client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -39,8 +39,12 @@ class BybitBalanceTool(BaseTool):
         )
         self.logger = logger
 
-    async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
-        """Execute trading operations asynchronously"""
+    def _run(self, **kwargs: Any) -> Dict[str, Any]:
+        """Synchronous version not supported"""
+        raise NotImplementedError("This tool only supports async operation")
+
+    async def _arun(self, **kwargs: Any) -> dict[str, Any] | str:
+        """Execute async balance operations"""
         try:
 
             operation = kwargs.get("operation")
@@ -117,15 +121,13 @@ class BybitBalanceTool(BaseTool):
 
 class BybitTradingTool(BaseTool):
     """Tool for executing trades on Bybit"""
-    name = "bybit_trading"
-    description = """Execute trading operations on Bybit exchange.
+    name: str = "bybit_trading"
+    description: str = """Execute trading operations on Bybit exchange.
     Supported operations:
     - execute_trade: Execute a trade with given parameters (symbol, side, qty)
-    - cancel_trade: Cancel an existing trade (order_id)
-    - get_order_status: Get status of an order (order_id)
     """
-    args_schema = BybitOperationInput
-    client: Type[HTTP] = Field(default=None, description="Bybit HTTP client")
+    args_schema: Type[BaseModel] = BybitOperationInput
+    client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -148,22 +150,21 @@ class BybitTradingTool(BaseTool):
         """Synchronous version not supported"""
         raise NotImplementedError("This tool only supports async operation")
 
-    async def _arun(self, operation: str, params: Dict[str, Any]) -> str:
+    async def _arun(self, **kwargs: Any) -> Dict[str, Any]| str:
         """Execute async trading operations"""
         try:
+
+            operation = kwargs.get("operation")
+
             if operation == "execute_trade":
-                symbol = params.get("symbol")
-                side = params.get("side")
-                qty = params.get("qty")
-                if not all([symbol, side, qty]):
-                    return "Error: Missing required parameters for trade execution"
-                return f"Executed trade: {symbol} {side} {qty}"
-            
-            else:
-                return f"Error: Unsupported operation {operation}"
-                
+                symbol = kwargs.get("symbol")
+                side = kwargs.get("side")
+                qty = kwargs.get("qty")
+                return await self._place_order(symbol, side, qty)
+            return {"success": False, "error": "Unknown operation"}
+
         except Exception as e:
-            logger.error(f"Error in BybitTradingTool: {e}")
+            logger.error(f"Error in BybitBalanceTool: {e}")
             return f"Error executing operation: {str(e)}"
 
     async def _set_leverage(self, symbol: str) -> Dict[str, Any]:
