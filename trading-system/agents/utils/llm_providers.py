@@ -7,6 +7,7 @@ import google.generativeai as genai
 from mistralai import Mistral, UserMessage, SystemMessage, AssistantMessage
 from enum import Enum
 from crewai import LLM
+import requests
 
 
 class LLMProvider(Enum):
@@ -14,6 +15,7 @@ class LLMProvider(Enum):
     ANTHROPIC = "anthropic"
     GEMINI = "gemini"
     MISTRAL = "mistral"
+    OLLAMA = "ollama"
 
 
 class BaseLLMProvider(ABC):
@@ -166,6 +168,42 @@ class MistralProvider(BaseLLMProvider):
         )
 
 
+class OllamaProvider(BaseLLMProvider):
+    """Ollama LLM provider"""
+    
+    def __init__(self, model: str = "llama2"):
+        self.base_url = "http://ollama:11434"
+        self.model = model
+        
+    async def initialize(self) -> bool:
+        try:
+            # Test API connection
+            response = requests.get(f"{self.base_url}/api/tags")
+            if response.status_code == 200:
+                models = response.json().get("models", [])
+                if not models or self.model not in [m["name"] for m in models]:
+                    logger.warning(f"Model {self.model} not found in available models")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama: {e}")
+            return False
+            
+    async def get_llm_config(self) -> Dict[str, Any]:
+        return {
+            "base_url": self.base_url,
+            "model": self.model
+        }
+
+    def get_crew_llm(self, temperature: float = 0.7) -> LLM:
+        return LLM(
+            model=self.model,
+            temperature=temperature,
+            base_url=self.base_url,
+            api_key="not-needed"  # Ollama doesn't require API key
+        )
+
+
 class LLMFactory:
     """Factory for creating LLM providers"""
     
@@ -191,6 +229,10 @@ class LLMFactory:
                 return MistralProvider(
                     api_key=config["api_key"],
                     model=config.get("model", "mistral-large-latest")
+                )
+            elif provider_type == LLMProvider.OLLAMA:
+                return OllamaProvider(
+                    model=config.get("model", "llama3")
                 )
             else:
                 logger.error(f"Unknown LLM provider type: {provider_type}")

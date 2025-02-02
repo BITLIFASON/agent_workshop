@@ -2,6 +2,31 @@ version: "3.8"
 
 services:
 
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    env_file:
+      - ./envs/llm.env
+    volumes:
+      - ./ollama/models:/root/.ollama
+      - ./ollama/install.sh:/install.sh
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "ollama list | awk 'NR>1' | grep -q ."]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    entrypoint: ["bash", "/install.sh"]
+
   postgres:
     container_name: postgres_db1
     image: postgres:15
@@ -20,6 +45,8 @@ services:
   trading_system:
     container_name: trading1
     build: trading-system
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Проброс хоста Linux в контейнер
     volumes:
       - ./logs:/app/logs
       - ./trading-system:/app
@@ -32,6 +59,8 @@ services:
       - ./envs/llm.env
     depends_on:
       postgres:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
 
   management_service:

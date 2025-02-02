@@ -9,71 +9,11 @@ from .trading_module import (
     create_trading_executor_agent,
     create_balance_controller_agent,
 )
-
-
-class TelegramConfig(BaseModel):
-    """Telegram configuration model"""
-    api_id: int = Field(int, description="Telegram API ID")
-    api_hash: str = Field(str, description="Telegram API hash")
-    session_token: str = Field(str, description="Telegram session token")
-    channel_url: str = Field(str, description="Telegram channel URL")
-    max_retries: int = Field(int, description="Maximum number of reconnection attempts")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class BybitConfig(BaseModel):
-    """Bybit configuration model"""
-    api_key: str = Field(str, description="Bybit API key")
-    api_secret: str = Field(str, description="Bybit API secret")
-    demo_mode: bool = Field(default=True, description="Whether to use testnet")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class DatabaseConfig(BaseModel):
-    """Database configuration model"""
-    host: str = Field(str, description="Database host")
-    port: str = Field(str, description="Database port")
-    user: str = Field(str, description="Database user")
-    password: str = Field(str, description="Database password")
-    database: str = Field(str, description="Database name")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class ManagementAPIConfig(BaseModel):
-    """Management API configuration model"""
-    host: str = Field(str, description="Management API host")
-    port: str = Field(str, description="Management API port")
-    token: str = Field(str, description="Management API token")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
-
-class LLMConfig(BaseModel):
-    """LLM configuration model"""
-    provider: str = Field(str, description="LLM provider name")
-    model: str = Field(str, description="LLM model name")
-    api_key: str = Field(str, description="LLM API key")
-    temperature: float = Field(default=0.7, description="LLM temperature")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
+from .utils.llm_providers import LLMProvider, LLMFactory
+from .utils.models import (
+    TelegramConfig, BybitConfig, DatabaseConfig,
+    ManagementAPIConfig, LLMConfig
+)
 
 
 class SystemConfig(BaseModel):
@@ -96,10 +36,28 @@ class TradingSystem:
         try:
             # Validate configuration
             self.config = SystemConfig(**config)
+            self._initialize_llm()
             self._create_agents()
             self._create_crew()
         except Exception as e:
             logger.error(f"Error initializing trading system: {e}")
+            raise
+
+    def _initialize_llm(self):
+        """Initialize shared LLM instance"""
+        try:
+            provider_type = LLMProvider(self.config.llm.provider)
+            llm_config = {
+                "api_key": self.config.llm.api_key,
+                "model": self.config.llm.model,
+            }
+            llm_provider = LLMFactory.create_provider(provider_type, llm_config)
+            if not llm_provider:
+                raise ValueError(f"Failed to create LLM provider: {provider_type}")
+            self.llm = llm_provider.get_crew_llm()
+            logger.info(f"Initialized shared LLM instance with provider {provider_type}")
+        except Exception as e:
+            logger.error(f"Error initializing LLM: {e}")
             raise
 
     def _create_agents(self):
@@ -109,7 +67,7 @@ class TradingSystem:
             self.trading_agent = create_trading_executor_agent(
                 name="trading_executor",
                 bybit_config=self.config.bybit.model_dump(),
-                llm_config=self.config.llm.model_dump()
+                llm=self.llm
             )
 
             # Create Balance Control Agent with trading callback
@@ -120,7 +78,7 @@ class TradingSystem:
                     "database": self.config.database.model_dump(),
                     "bybit": self.config.bybit.model_dump()
                 },
-                llm_config=self.config.llm.model_dump()
+                llm=self.llm
             )
 
             # Create Parser Agent last since it depends on Balance Control Agent
@@ -128,7 +86,7 @@ class TradingSystem:
                 name="signal_parser",
                 telegram_config=self.config.telegram.model_dump(),
                 message_callback=self.process_signal,
-                llm_config=self.config.llm.model_dump()
+                llm=self.llm
             )
 
         except Exception as e:

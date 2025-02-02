@@ -3,13 +3,12 @@ from crewai import Agent, Task
 from loguru import logger
 from .tools.bybit_tools import BybitTradingTool, BybitBalanceTool
 from .tools.balance_tools import DatabaseTool, ManagementServiceTool
-from .utils.llm_providers import LLMProvider, LLMFactory
 
 
 def create_trading_executor_agent(
     name: str,
     bybit_config: Dict[str, Any],
-    llm_config: Optional[Dict[str, Any]] = None
+    llm: Any
 ) -> Agent:
     """Create trading executor agent"""
     # Initialize trading tool
@@ -18,12 +17,6 @@ def create_trading_executor_agent(
         api_secret=bybit_config.get('api_secret'),
         demo_mode=bybit_config.get('demo_mode', True)
     )
-
-    # Initialize LLM provider
-    provider_type = LLMProvider(llm_config.get("provider", "openai"))
-    llm_provider = LLMFactory.create_provider(provider_type, llm_config)
-    if not llm_provider:
-        raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
     # Create and return agent
     agent = Agent(
@@ -34,7 +27,7 @@ def create_trading_executor_agent(
         on the Bybit exchange. You ensure trades are executed with proper parameters and
         monitor their execution status.""",
         tools=[trading_tool],
-        llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
+        llm=llm,
         verbose=True
     )
     
@@ -44,7 +37,7 @@ def create_trading_executor_agent(
 def create_balance_controller_agent(
     name: str,
     config: Dict[str, Dict[str, Any]],
-    llm_config: Optional[Dict[str, Any]] = None
+    llm: Any
 ) -> Agent:
     """Create balance controller agent"""
     # Initialize tools
@@ -71,12 +64,6 @@ def create_balance_controller_agent(
         demo_mode=bybit_config.get('demo_mode', True)
     )
 
-    # Initialize LLM provider
-    provider_type = LLMProvider(llm_config.get("provider", "openai"))
-    llm_provider = LLMFactory.create_provider(provider_type, llm_config)
-    if not llm_provider:
-        raise ValueError(f"Failed to create LLM provider: {provider_type}")
-
     # Create and return agent
     agent = Agent(
         name=name,
@@ -86,7 +73,7 @@ def create_balance_controller_agent(
         compliance with system limits. You monitor system status, verify price limits,
         and manage trading lots.""",
         tools=[management_tool, db_tool, balance_tool],
-        llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
+        llm=llm,
         verbose=True
     )
     

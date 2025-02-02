@@ -3,14 +3,13 @@ from datetime import datetime, timedelta
 from crewai import Agent, Task
 from loguru import logger
 from .tools.parser_tools import SignalParserTool, TelegramListenerTool
-from .utils.llm_providers import LLMProvider, LLMFactory
 
 
 def create_signal_parser_agent(
     name: str,
     telegram_config: Dict[str, Any],
-    message_callback: Optional[Callable] = None,
-    llm_config: Optional[Dict[str, Any]] = None
+    llm: Any,
+    message_callback: Optional[Callable] = None
 ) -> Agent:
     """Create signal parser agent"""
     # Initialize tools
@@ -23,12 +22,6 @@ def create_signal_parser_agent(
         message_callback=message_callback
     )
 
-    # Initialize LLM provider
-    provider_type = LLMProvider(llm_config.get("provider", "openai"))
-    llm_provider = LLMFactory.create_provider(provider_type, llm_config)
-    if not llm_provider:
-        raise ValueError(f"Failed to create LLM provider: {provider_type}")
-
     # Create and return agent
     agent = Agent(
         name=name,
@@ -38,7 +31,7 @@ def create_signal_parser_agent(
         extracting trading signals, and validating their format and content. You ensure
         signals are properly formatted and contain all required information.""",
         tools=[telegram_tool, parser_tool],
-        llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
+        llm=llm,
         verbose=True
     )
 
