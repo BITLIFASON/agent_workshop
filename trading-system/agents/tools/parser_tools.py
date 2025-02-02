@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from loguru import logger
 from crewai.tools import BaseTool
 import asyncio
-from ..utils.models import SignalData, SignalParserInput
+from ..utils.models import SignalParserInput, SourceSignalInput, SignalData
 
 
 class SignalParserTool(BaseTool):
@@ -116,6 +116,7 @@ class TelegramListenerTool(BaseTool):
     """
     name: str = "telegram_listener"
     description: str = "Tool for listening to Telegram messages"
+    args_schema: Type[BaseModel] = SourceSignalInput
     client: Optional[TelegramClient] = Field(default=None, description="Telegram client")
     channel_url: str = Field(str, description="Channel URL to listen to")
     message_callback: Optional[Callable] = Field(default=None, description="Callback for new messages")

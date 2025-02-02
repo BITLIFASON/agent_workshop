@@ -36,9 +36,6 @@ class TradingSystem:
         try:
             # Validate configuration
             self.config = SystemConfig(**config)
-            self._initialize_llm()
-            self._create_agents()
-            self._create_crew()
         except Exception as e:
             logger.error(f"Error initializing trading system: {e}")
             raise
@@ -152,9 +149,9 @@ class TradingSystem:
         try:
             logger.info("Initializing trading system...")
             # Initialize crew
-            await self.crew.kickoff({
-                "operation": "initialize_system"
-            })
+            self._initialize_llm()
+            self._create_agents()
+            self._create_crew()
             logger.info("Trading system initialized successfully")
             return True
         except Exception as e:
@@ -165,11 +162,7 @@ class TradingSystem:
         """Start the trading system"""
         try:
             logger.info("Starting trading system...")
-            # Start crew operations
-            await self.crew.kickoff({
-                "operation": "start_system"
-            })
-            # Run until interrupted
+
             while True:
                 await asyncio.sleep(1)
         except Exception as e:

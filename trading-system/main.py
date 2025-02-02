@@ -15,10 +15,11 @@ async def main():
         
         # Initialize trading system
         trading_system = TradingSystem(config)
-        await trading_system.initialize()
+        initialized = await trading_system.initialize()
         
         # Run the system
-        await trading_system.start()
+        if initialized:
+            await trading_system.start()
         
     except Exception as e:
         logger.error(f"Error in main: {e}")
