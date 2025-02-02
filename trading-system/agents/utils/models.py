@@ -5,7 +5,7 @@ from datetime import datetime
 
 class SignalParserInput(BaseModel):
     """Input schema for SignalParserTool"""
-    message: str = Field(str, description="Message text to parse for trading signals")
+    message: str = Field(description="Message text to parse for trading signals")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -62,9 +62,9 @@ class BybitTradingInput(BaseModel):
 
 class SignalData(BaseModel):
     """Model for parsed trading signals"""
-    symbol: str = Field(str, description="Trading pair symbol (e.g., 'MINAUSDT')")
-    action: str = Field(str, description="Trading action ('buy' or 'sell')")
-    price: float = Field(float, description="Entry or exit price for the trade")
+    symbol: str = Field(description="Trading pair symbol (e.g., 'MINAUSDT')")
+    action: str = Field(description="Trading action ('buy' or 'sell')")
+    price: float = Field(description="Entry or exit price for the trade")
     profit_percentage: Optional[float] = Field(None, description="Profit percentage for sell signals")
     timestamp: datetime = Field(default_factory=datetime.now)
 

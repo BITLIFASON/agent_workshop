@@ -34,7 +34,7 @@ class SignalParserTool(BaseTool):
     def __init__(self, **kwargs):
         """Initialize SignalParserTool"""
         super().__init__(**kwargs)
-        self.buy_pattern = re.compile(r'.\s(\w+)\s+BUY LONG PRICE:\s+(\d+\.\d+)')
+        self.buy_pattern = re.compile(r'⬆️\s+(\w+)\s+BUY\s+LONG\s+PRICE:\s+(\d+\.\d+)')
         self.sell_pattern = re.compile(r'.\s(\w+)\s+(?:🟢|🔴)\sPROFIT:\s+((?:[+-]\s*)?\d+\.\d+)\%\sCLOSE LONG PRICE:\s+(\d+\.\d+)')
 
     def _parse_buy_signal(self, text: str) -> Optional[Dict[str, Any]]:
