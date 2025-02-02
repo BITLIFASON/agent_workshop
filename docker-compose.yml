@@ -22,7 +22,7 @@ services:
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "bash", "-c", "ollama list | awk 'NR>1' | grep -q ."]
-      interval: 30s
+      interval: 10s
       timeout: 10s
       retries: 5
     entrypoint: ["bash", "/install.sh"]
