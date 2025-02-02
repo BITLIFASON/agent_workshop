@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, Callable
 from datetime import datetime, timedelta
-from crewai import Agent
+from crewai import Agent, Task
 from loguru import logger
 from .tools.parser_tools import SignalParserTool, TelegramListenerTool
 from .utils.llm_providers import LLMProvider, LLMFactory
@@ -30,7 +30,7 @@ def create_signal_parser_agent(
         raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
     # Create and return agent
-    return Agent(
+    agent = Agent(
         name=name,
         role="Signal Parser",
         goal="Parse and validate trading signals",
@@ -41,6 +41,8 @@ def create_signal_parser_agent(
         llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
         verbose=True
     )
+
+    return agent
 
 
 async def cleanup_signal_tools(agent: Agent):

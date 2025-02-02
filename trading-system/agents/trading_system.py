@@ -3,6 +3,7 @@ from typing import Dict, Any
 import asyncio
 from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
+from crewai import Crew, Process, Task
 from .signal_module import create_signal_parser_agent, cleanup_signal_tools
 from .trading_module import (
     create_trading_executor_agent,
@@ -96,6 +97,7 @@ class TradingSystem:
             # Validate configuration
             self.config = SystemConfig(**config)
             self._create_agents()
+            self._create_crew()
         except Exception as e:
             logger.error(f"Error initializing trading system: {e}")
             raise
@@ -134,11 +136,54 @@ class TradingSystem:
             logger.error(f"Error creating agents: {e}")
             raise
 
+    def _create_crew(self):
+        """Create and configure the trading crew"""
+        try:
+            # Create tasks for each agent
+            signal_monitoring_task = Task(
+                description="""Monitor Telegram channels for trading signals. 
+                Parse incoming messages and extract trading information.
+                Validate signal format and content.""",
+                agent=self.parser_agent
+            )
+
+            balance_control_task = Task(
+                description="""Monitor and control trading balance.
+                Verify system status and price limits.
+                Manage trading lots and ensure compliance with system limits.""",
+                agent=self.balance_control_agent
+            )
+
+            trading_execution_task = Task(
+                description="""Execute trades on the exchange.
+                Place and manage orders with proper parameters.
+                Monitor order execution status.""",
+                agent=self.trading_agent
+            )
+
+            # Create crew with defined tasks
+            self.crew = Crew(
+                agents=[self.parser_agent, self.balance_control_agent, self.trading_agent],
+                tasks=[signal_monitoring_task, balance_control_task, trading_execution_task],
+                process=Process.sequential,
+                verbose=True
+            )
+
+            logger.info("Trading crew created successfully")
+        except Exception as e:
+            logger.error(f"Error creating trading crew: {e}")
+            raise
+
     async def process_signal(self, signal_data: dict):
         """Process trading signal through the system"""
         try:
             logger.info(f"Processing signal: {signal_data}")
-            await self.balance_control_agent.process_signal(signal_data)
+            # Запускаем обработку сигнала через crew
+            result = await self.crew.kickoff({
+                "signal": signal_data,
+                "operation": "process_trading_signal"
+            })
+            logger.info(f"Signal processing result: {result}")
         except Exception as e:
             logger.error(f"Error processing signal: {e}")
 
@@ -146,6 +191,10 @@ class TradingSystem:
         """Initialize the trading system"""
         try:
             logger.info("Initializing trading system...")
+            # Initialize crew
+            await self.crew.kickoff({
+                "operation": "initialize_system"
+            })
             logger.info("Trading system initialized successfully")
             return True
         except Exception as e:
@@ -156,6 +205,10 @@ class TradingSystem:
         """Start the trading system"""
         try:
             logger.info("Starting trading system...")
+            # Start crew operations
+            await self.crew.kickoff({
+                "operation": "start_system"
+            })
             # Run until interrupted
             while True:
                 await asyncio.sleep(1)
@@ -169,9 +222,15 @@ class TradingSystem:
         try:
             logger.info("Shutting down trading system...")
             
+            # Shutdown crew
+            if hasattr(self, 'crew'):
+                await self.crew.kickoff({
+                    "operation": "shutdown_system"
+                })
+            
             # Cleanup parser agent and its tools
             if hasattr(self, 'parser_agent'):
-                await cleanup_signal_tools()
+                await cleanup_signal_tools(self.parser_agent)
                 logger.info("Signal parser cleanup completed")
 
             # Cleanup balance control agent

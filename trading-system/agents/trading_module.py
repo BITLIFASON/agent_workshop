@@ -1,5 +1,6 @@
 from typing import Dict, Any, Optional, Callable
-from crewai import Agent
+from crewai import Agent, Task
+from loguru import logger
 from .tools.bybit_tools import BybitTradingTool, BybitBalanceTool
 from .tools.balance_tools import DatabaseTool, ManagementServiceTool
 from .utils.llm_providers import LLMProvider, LLMFactory
@@ -25,7 +26,7 @@ def create_trading_executor_agent(
         raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
     # Create and return agent
-    return Agent(
+    agent = Agent(
         name=name,
         role="Trading Executor",
         goal="Execute trades on exchange accurately and efficiently",
@@ -36,6 +37,8 @@ def create_trading_executor_agent(
         llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
         verbose=True
     )
+    
+    return agent
 
 
 def create_balance_controller_agent(
@@ -76,7 +79,7 @@ def create_balance_controller_agent(
         raise ValueError(f"Failed to create LLM provider: {provider_type}")
 
     # Create and return agent
-    return Agent(
+    agent = Agent(
         name=name,
         role="Balance Controller",
         goal="Monitor and control trading balance",
@@ -87,3 +90,5 @@ def create_balance_controller_agent(
         llm=llm_provider.get_crew_llm(temperature=llm_config.get("temperature", 0.7)),
         verbose=True
     )
+    
+    return agent
