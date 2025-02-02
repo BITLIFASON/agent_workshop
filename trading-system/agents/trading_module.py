@@ -1,6 +1,5 @@
 from typing import Dict, Any, Optional, Callable
 from crewai import Agent
-from loguru import logger
 from .tools.bybit_tools import BybitTradingTool, BybitBalanceTool
 from .tools.balance_tools import DatabaseTool, ManagementServiceTool
 from .utils.llm_providers import LLMProvider, LLMFactory

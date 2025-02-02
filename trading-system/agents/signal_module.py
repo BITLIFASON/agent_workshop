@@ -45,6 +45,21 @@ def create_signal_parser_agent(
 
 async def cleanup_signal_tools(agent: Agent):
     """Cleanup signal module tools"""
+    if not agent or not hasattr(agent, 'tools'):
+        logger.warning("No agent or tools to cleanup")
+        return
+
+    cleanup_errors = []
     for tool in agent.tools:
-        if hasattr(tool, 'cleanup'):
-            await tool.cleanup() 
+        try:
+            if hasattr(tool, 'cleanup'):
+                logger.info(f"Cleaning up tool: {tool.name}")
+                await tool.cleanup()
+                logger.info(f"Successfully cleaned up tool: {tool.name}")
+        except Exception as e:
+            error_msg = f"Error cleaning up tool {tool.name}: {e}"
+            logger.error(error_msg)
+            cleanup_errors.append(error_msg)
+    
+    if cleanup_errors:
+        raise Exception("Errors during signal tools cleanup: " + "; ".join(cleanup_errors)) 

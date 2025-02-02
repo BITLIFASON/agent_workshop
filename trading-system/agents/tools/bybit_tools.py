@@ -105,6 +105,14 @@ class BybitBalanceTool(BaseTool):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    async def cleanup(self):
+        """Cleanup resources"""
+        try:
+            if self.client:
+                self.client = None
+            logger.info("BybitBalanceTool cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during BybitBalanceTool cleanup: {e}")
 
 
 class BybitTradingTool(BaseTool):
@@ -205,8 +213,11 @@ class BybitTradingTool(BaseTool):
             logger.error(f"Failed to place order: {e}")
             return {"success": False, "error": str(e)}
 
-
     async def cleanup(self):
         """Cleanup resources"""
-        # Cleanup Bybit client if needed
-        pass
+        try:
+            if self.client:
+                self.client = None
+            logger.info("BybitTradingTool cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during BybitTradingTool cleanup: {e}")

@@ -168,6 +168,27 @@ class TradingSystem:
         """Shutdown the trading system"""
         try:
             logger.info("Shutting down trading system...")
+            
+            # Cleanup parser agent and its tools
+            if hasattr(self, 'parser_agent'):
+                await cleanup_signal_tools()
+                logger.info("Signal parser cleanup completed")
+
+            # Cleanup balance control agent
+            if hasattr(self, 'balance_control_agent'):
+                if hasattr(self.balance_control_agent, 'tools'):
+                    for tool in self.balance_control_agent.tools:
+                        if hasattr(tool, 'cleanup'):
+                            await tool.cleanup()
+                logger.info("Balance control agent cleanup completed")
+
+            # Cleanup trading agent
+            if hasattr(self, 'trading_agent'):
+                if hasattr(self.trading_agent, 'tools'):
+                    for tool in self.trading_agent.tools:
+                        if hasattr(tool, 'cleanup'):
+                            await tool.cleanup()
+                logger.info("Trading agent cleanup completed")
 
             logger.info("Trading system shutdown complete")
         except Exception as e:

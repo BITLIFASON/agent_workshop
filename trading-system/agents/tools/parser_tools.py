@@ -96,6 +96,16 @@ class SignalParserTool(BaseTool):
         """Async version of _run"""
         return self._run(message)
 
+    async def cleanup(self):
+        """Cleanup resources"""
+        try:
+            # Clear regex patterns
+            self.buy_pattern = None
+            self.sell_pattern = None
+            logger.info("SignalParserTool cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during SignalParserTool cleanup: {e}")
+
 
 class TelegramListenerTool(BaseTool):
     """Tool for listening to Telegram messages.
