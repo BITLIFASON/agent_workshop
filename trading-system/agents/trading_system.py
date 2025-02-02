@@ -171,11 +171,14 @@ class TradingSystem:
                 await self.crew.kickoff({
                     "operation": "shutdown_system"
                 })
-            
-            # Cleanup parser agent and its tools
+
+            # Cleanup parser agent
             if hasattr(self, 'parser_agent'):
-                await cleanup_signal_tools(self.parser_agent)
-                logger.info("Signal parser cleanup completed")
+                if hasattr(self.parser_agent, 'tools'):
+                    for tool in self.parser_agent.tools:
+                        if hasattr(tool, 'cleanup'):
+                            await tool.cleanup()
+                logger.info("Signal parser agent cleanup completed")
 
             # Cleanup balance control agent
             if hasattr(self, 'balance_control_agent'):

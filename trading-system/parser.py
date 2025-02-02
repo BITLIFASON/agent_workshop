@@ -40,9 +40,9 @@ class TelegramParser:
             Exception: If an error occurs during initialization.
         """
 
-        client = TelegramClient(StringSession(self.config.session_token),
-                                self.config.api_id,
-                                self.config.api_hash,
+        client = TelegramClient(StringSession(self.config['session_token']),
+                                self.config['api_id'],
+                                self.config['api_hash'],
                                 system_version='4.16.30-vxMANUAL')
         await client.start()
         return client
@@ -61,7 +61,7 @@ class TelegramParser:
             Exception: If an error occurs during setup.
         """
         try:
-            @self.telegram_client.on(events.NewMessage(chats=[self.config.channel_url]))
+            @self.telegram_client.on(events.NewMessage(chats=[self.config['channel_url']]))
             async def new_message_handler(event):
                 message = event.message
                 text_message = message.message

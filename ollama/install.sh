@@ -13,7 +13,7 @@ echo "Ollama server is ready. Starting to run model..."
 if [ ! -z "${LLM_MODEL}" ]; then
     model=$(echo "$LLM_MODEL" | cut -d'/' -f2)
     echo "Running ${model}..."
-    ollama run ${model}
+    ollama run ${model} /set parameter num_ctx 8192
 fi
 
 # Keep the container running
