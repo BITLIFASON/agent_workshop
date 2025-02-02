@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from loguru import logger
 from crewai.tools import BaseTool
 import asyncio
-from ..utils.models import SignalParserInput, SourceSignalInput, SignalData
+from ..utils.models import SignalParserInput, SignalData
 
 
 class SignalParserTool(BaseTool):
@@ -105,109 +105,3 @@ class SignalParserTool(BaseTool):
             logger.info("SignalParserTool cleanup completed")
         except Exception as e:
             logger.error(f"Error during SignalParserTool cleanup: {e}")
-
-
-class TelegramListenerTool(BaseTool):
-    """Tool for listening to Telegram messages.
-    
-    This tool provides functionality to connect to Telegram and listen
-    for messages in specified channels. It handles message reception
-    and forwards them to the appropriate callback for processing.
-    """
-    name: str = "telegram_listener"
-    description: str = "Tool for listening to Telegram messages"
-    args_schema: Type[BaseModel] = SourceSignalInput
-    client: Optional[TelegramClient] = Field(default=None, description="Telegram client")
-    channel_url: str = Field(str, description="Channel URL to listen to")
-    message_callback: Optional[Callable] = Field(default=None, description="Callback for new messages")
-    max_retries: int = Field(int, description="Maximum number of reconnection attempts")
-    
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def __init__(
-        self,
-        api_id: int,
-        api_hash: str,
-        session_token: str,
-        channel_url: str,
-        message_callback: Optional[Callable] = None,
-        max_retries: int = 3,
-        **kwargs
-    ):
-        """Initialize TelegramListenerTool"""
-        super().__init__(**kwargs)
-        self.channel_url = channel_url
-        self.message_callback = message_callback
-        self.max_retries = max_retries
-        self.client = TelegramClient(
-            StringSession(session_token),
-            api_id,
-            api_hash
-        )
-
-    def _run(self, **kwargs: Any) -> Dict[str, Any]:
-        """Synchronous version not supported"""
-        raise NotImplementedError("This tool only supports async operation")
-
-    async def _setup_message_handler(self):
-        """Setup message handler for Telegram channel"""
-        @self.client.on(events.NewMessage(chats=[self.channel_url]))
-        async def new_message_handler(event):
-            try:
-                if self.message_callback:
-                    message_text = event.message.message.strip()
-                    logger.info(f"Received message: {message_text}")
-                    await self.message_callback(message_text)
-            except Exception as e:
-                logger.error(f"Error processing message: {e}")
-
-    async def _connect_with_retry(self) -> bool:
-        """Connect to Telegram with retry logic"""
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                if not self.client.is_connected():
-                    await self.client.connect()
-                    
-                if not await self.client.is_user_authorized():
-                    await self.client.start()
-                    
-                return True
-            except Exception as e:
-                retries += 1
-                logger.error(f"Connection attempt {retries} failed: {e}")
-                if retries < self.max_retries:
-                    await asyncio.sleep(10)  # Wait before retry
-                
-        return False
-
-    async def _arun(self, **kwargs: Any) -> Dict[str, Any]:
-        """Run the Telegram listener"""
-        try:
-            # Setup message handler
-            await self._setup_message_handler()
-            
-            # Connect with retry logic
-            if not await self._connect_with_retry():
-                return {
-                    "status": "error",
-                    "message": "Failed to connect to Telegram after maximum retries"
-                }
-
-            logger.info("Successfully connected to Telegram")
-            
-            # Run until disconnected
-            async with self.client:
-                await self.client.run_until_disconnected()
-                
-            return {"status": "success"}
-            
-        except Exception as e:
-            logger.error(f"Error in Telegram listener: {e}")
-            return {"status": "error", "message": str(e)}
-
-    async def cleanup(self):
-        """Cleanup resources"""
-        if self.client:
-            await self.client.disconnect()
-            self.client = None

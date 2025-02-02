@@ -2,26 +2,16 @@ from typing import Dict, Any, Optional, Callable
 from datetime import datetime, timedelta
 from crewai import Agent, Task
 from loguru import logger
-from .tools.parser_tools import SignalParserTool, TelegramListenerTool
+from .tools.parser_tools import SignalParserTool
 
 
 def create_signal_parser_agent(
     name: str,
-    telegram_config: Dict[str, Any],
     llm: Any,
-    message_callback: Optional[Callable] = None
 ) -> Agent:
     """Create signal parser agent"""
     # Initialize tools
     parser_tool = SignalParserTool()
-    telegram_tool = TelegramListenerTool(
-        api_id=telegram_config.get('api_id'),
-        api_hash=telegram_config.get('api_hash'),
-        session_token=telegram_config.get('session_token'),
-        channel_url=telegram_config.get('channel_url'),
-        message_callback=message_callback
-    )
-
     # Create and return agent
     agent = Agent(
         name=name,
@@ -30,7 +20,7 @@ def create_signal_parser_agent(
         backstory="""You are a signal parser responsible for monitoring Telegram channels,
         extracting trading signals, and validating their format and content. You ensure
         signals are properly formatted and contain all required information.""",
-        tools=[telegram_tool, parser_tool],
+        tools=[parser_tool],
         llm=llm,
         verbose=True
     )

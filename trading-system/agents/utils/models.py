@@ -12,15 +12,6 @@ class SignalParserInput(BaseModel):
         frozen=True
     )
 
-class SourceSignalInput(BaseModel):
-    """Input schema for SourceSignalInput"""
-    message: str = Field(str, description="Source message text from Telegram channel")
-
-    model_config = ConfigDict(
-        validate_assignment=True,
-        frozen=True
-    )
-
 
 class DatabaseOperationInput(BaseModel):
     """Input schema for DatabaseTool"""

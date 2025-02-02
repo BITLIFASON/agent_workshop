@@ -1,7 +1,6 @@
-import os
 from typing import Dict, Any
 import asyncio
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from loguru import logger
 from crewai import Crew, Process, Task
 from .signal_module import create_signal_parser_agent, cleanup_signal_tools
@@ -81,8 +80,6 @@ class TradingSystem:
             # Create Parser Agent last since it depends on Balance Control Agent
             self.parser_agent = create_signal_parser_agent(
                 name="signal_parser",
-                telegram_config=self.config.telegram.model_dump(),
-                message_callback=self.process_signal,
                 llm=self.llm
             )
 
@@ -131,18 +128,12 @@ class TradingSystem:
             logger.error(f"Error creating trading crew: {e}")
             raise
 
-    async def process_signal(self, signal_data: dict):
-        """Process trading signal through the system"""
+    async def get_crew(self) -> Crew:
+        """Getting crew"""
         try:
-            logger.info(f"Processing signal: {signal_data}")
-            # Запускаем обработку сигнала через crew
-            result = await self.crew.kickoff({
-                "signal": signal_data,
-                "operation": "process_trading_signal"
-            })
-            logger.info(f"Signal processing result: {result}")
+            return self.crew
         except Exception as e:
-            logger.error(f"Error processing signal: {e}")
+            logger.error(f"Error getting trading system: {e}")
 
     async def initialize(self) -> bool:
         """Initialize the trading system"""
