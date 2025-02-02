@@ -161,7 +161,8 @@ class MistralProvider(BaseLLMProvider):
             model=self.model,
             temperature=temperature,
             base_url="https://api.mistral.ai/v1",
-            api_key=self.api_key
+            api_key=self.api_key,
+            timeout=1
         )
 
 
