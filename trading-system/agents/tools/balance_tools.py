@@ -34,11 +34,11 @@ class DatabaseTool(BaseTool):
     description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
     conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
-    host: str = Field(str, description="Database host")
-    port: str = Field(str, description="Database port")
-    user: str = Field(str, description="Database user")
-    password: str = Field(str, description="Database password")
-    database: str = Field(str, description="Database name")
+    host: str = Field(description="Database host")
+    port: str = Field(description="Database port")
+    user: str = Field(description="Database user")
+    password: str = Field(description="Database password")
+    database: str = Field(description="Database name")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -274,10 +274,10 @@ class ManagementServiceTool(BaseTool):
     - get_num_available_lots: Get number of available lots from management service
     """
     args_schema: Type[BaseModel] = ManagementServiceInput
-    host: str = Field(str, description="Management service host")
-    port: str = Field(str, description="Management service port")
-    base_url: str = Field(str, description="Management service base URL")
-    token: str = Field(str, description="Management service token")
+    host: str = Field(description="Management service host")
+    port: str = Field(description="Management service port")
+    base_url: str = Field(description="Management service base URL")
+    token: str = Field(description="Management service token")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

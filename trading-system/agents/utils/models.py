@@ -56,7 +56,7 @@ class BybitOperationParams(BaseModel):
 
 class BybitTradingInput(BaseModel):
     """Input schema for BybitTradingTool"""
-    operation: str = Field(str, description="Operation to perform")
+    operation: str = Field(description="Operation to perform")
     params: BybitOperationParams = Field(default_factory=BybitOperationParams)
 
 
