@@ -24,7 +24,8 @@ def create_signal_parser_agent(
         Do not use example messages, only work with the actual input message.""",
         tools=[parser_tool],
         llm=llm,
-        verbose=True
+        verbose=True,
+        max_iter=2
     )
 
     return agent

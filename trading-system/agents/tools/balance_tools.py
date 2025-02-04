@@ -264,20 +264,15 @@ class DatabaseTool(BaseTool):
 
 
 class ManagementServiceTool(BaseTool):
-    """Tool for interacting with Management Service.
-    
-    This tool provides functionality to interact with the management service,
-    including system status checks, price limit verification, and other
-    management operations.
-    
+    """Tool for management service operations"""
+    name: str = "management"
+    description: str = """Tool for management service operations.
     Supported operations:
     - get_system_status: Get system status from management service
     - get_price_limit: Get price limit from management service
     - get_fake_balance: Get fake balance from management service
     - get_num_available_lots: Get number of available lots from management service
     """
-    name: str = "management_service"
-    description: str = "Tool for interacting with Management Service"
     args_schema: Type[BaseModel] = ManagementServiceInput
     host: str = Field(str, description="Management service host")
     port: str = Field(str, description="Management service port")
@@ -298,7 +293,7 @@ class ManagementServiceTool(BaseTool):
         self.host = host
         self.port = port
         self.token = token
-        self.base_url = f"http://{self.host}:{self.port}"
+        self.base_url = f"{self.host}:{self.port}"
 
     def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Run management service operation"""

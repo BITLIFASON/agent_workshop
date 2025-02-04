@@ -28,7 +28,8 @@ def create_trading_executor_agent(
         monitor their execution status.""",
         tools=[trading_tool],
         llm=llm,
-        verbose=True
+        verbose=True,
+        max_iter=2
     )
     
     return agent
@@ -74,7 +75,8 @@ def create_balance_controller_agent(
         and manage trading lots.""",
         tools=[management_tool, db_tool, balance_tool],
         llm=llm,
-        verbose=True
+        verbose=True,
+        max_iter=6
     )
     
     return agent
