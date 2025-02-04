@@ -39,32 +39,36 @@ class BybitBalanceTool(BaseTool):
         )
         self.logger = logger
 
-    def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
+    def _run(self, operation:str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute synchronous operations"""
         try:
-
             logger.info(f"[BybitBalanceTool] Executing operation: {operation}")
-            logger.info(f"[BybitBalanceTool] Arguments: {kwargs}")
+            logger.info(f"[BybitBalanceTool] Arguments: {params}")
 
             result = None
             if operation == "get_wallet_balance":
                 result = self._get_wallet_balance()
             elif operation == "get_coin_balance":
-                symbol = kwargs.get("symbol")
+                symbol = params.get("symbol")
                 result = self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
-                symbol = kwargs.get("symbol")
+                symbol = params.get("symbol")
                 result = self._get_coin_info(symbol)
             else:
                 result = {"success": False, "error": "Unknown operation"}
 
             logger.info(f"[BybitBalanceTool] Operation result: {result}")
-            return result
+            # Форматируем результат для CrewAI
+            if isinstance(result, dict):
+                if result.get("success") is False:
+                    return {"result": str(result.get("error", "Unknown error"))}
+                return {"result": str(result.get("data", result))}
+            return {"result": str(result)}
 
         except Exception as e:
             error_msg = f"Error in BybitBalanceTool: {e}"
             logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            return {"result": error_msg}
 
     def _get_wallet_balance(self) -> Dict[str, Any]:
         """Get wallet USDT balance"""
@@ -150,18 +154,18 @@ class BybitTradingTool(BaseTool):
         self.logger = logger
 
 
-    def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
+    def _run(self, operation: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute trading operations"""
         try:
-            
+            operation = operation
             logger.info(f"[BybitTradingTool] Executing operation: {operation}")
-            logger.info(f"[BybitTradingTool] Arguments: {kwargs}")
+            logger.info(f"[BybitTradingTool] Arguments: {params}")
 
             result = None
             if operation == "execute_trade":
-                symbol = kwargs.get("symbol")
-                side = kwargs.get("side")
-                qty = kwargs.get("qty")
+                symbol = params.get("symbol")
+                side = params.get("side")
+                qty = params.get("qty")
                 
                 # Проверяем наличие всех необходимых параметров
                 if not symbol:
@@ -176,12 +180,17 @@ class BybitTradingTool(BaseTool):
                 result = {"success": False, "error": "Unknown operation"}
 
             logger.info(f"[BybitTradingTool] Operation result: {result}")
-            return result
+            # Форматируем результат для CrewAI
+            if isinstance(result, dict):
+                if result.get("success") is False:
+                    return {"result": str(result.get("error", "Unknown error"))}
+                return {"result": str(result.get("data", result))}
+            return {"result": str(result)}
 
         except Exception as e:
             error_msg = f"Error in BybitTradingTool: {e}"
             logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+            return {"result": error_msg}
 
     def _set_leverage(self, symbol: str) -> Dict[str, Any]:
         """Set leverage for symbol"""

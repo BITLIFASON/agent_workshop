@@ -22,7 +22,7 @@ class DatabaseOperationInput(BaseModel):
     symbol: Optional[str] = Field(None, description="Trading pair symbol")
     qty: Optional[float] = Field(None, description="Order quantity")
     price: Optional[float] = Field(None, description="Order price")
-    action: Optional[str] = Field(None, description="Action type (for history lots)")
+    action: Optional[str] = Field(None, description="Action type [Buy, Sell] (for history lots)")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -49,21 +49,10 @@ class BybitOperationInput(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict, description="Operation parameters")
 
 
-class BybitOperationParams(BaseModel):
-    """Base model for Bybit operation parameters"""
-    symbol: Optional[str] = Field(None, description="Trading pair symbol")
-
-
-class BybitTradingInput(BaseModel):
-    """Input schema for BybitTradingTool"""
-    operation: str = Field(description="Operation to perform")
-    params: BybitOperationParams = Field(default_factory=BybitOperationParams)
-
-
 class SignalData(BaseModel):
     """Model for parsed trading signals"""
     symbol: str = Field(description="Trading pair symbol (e.g., 'MINAUSDT')")
-    action: str = Field(description="Trading action ('buy' or 'sell')")
+    action: str = Field(description="Trading action [Buy, Sell]")
     price: float = Field(description="Entry or exit price for the trade")
     profit_percentage: Optional[float] = Field(None, description="Profit percentage for sell signals")
     timestamp: datetime = Field(default_factory=datetime.now)

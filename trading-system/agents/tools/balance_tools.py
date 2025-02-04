@@ -23,7 +23,6 @@ class DatabaseTool(BaseTool):
     
     Supported operations:
     - create_lot: Create new lot record
-    - get_active_lots: Get active lots for symbol
     - delete_lot: Delete lot record
     - create_history_lot: Create history lot record
     - get_symbols_active_lots: Get all active lot symbols
@@ -129,29 +128,41 @@ class DatabaseTool(BaseTool):
 
             result = None
             if operation == "create_lot":
-                result = self._create_lot(**kwargs)
-            elif operation == "get_active_lots":
-                result = self._get_active_lots(**kwargs)
+                symbol = kwargs.get('symbol')
+                qty = kwargs.get('qty')
+                price = kwargs.get('price')
+                result = self._create_lot(symbol, qty, price)
             elif operation == "delete_lot":
-                result = self._delete_lot(**kwargs)
+                symbol = kwargs.get('symbol')
+                result = self._delete_lot(symbol)
             elif operation == "create_history_lot":
-                result = self._create_history_lot(**kwargs)
+                action = kwargs.get('action')
+                symbol = kwargs.get('symbol')
+                qty = kwargs.get('qty')
+                price = kwargs.get('price')
+                result = self._create_history_lot(action, symbol, qty, price)
             elif operation == "get_symbols_active_lots":
                 result = self._get_symbols_active_lots()
             elif operation == "get_count_lots":
                 result = self._get_count_lots()
             elif operation == "get_qty_symbol":
-                result = self._get_qty_symbol(**kwargs)
+                symbol = kwargs.get('symbol')
+                result = self._get_qty_symbol(symbol)
             else:
                 result = {"status": "error", "message": f"Unknown operation: {operation}"}
 
             logger.info(f"[DatabaseTool] Operation result: {result}")
-            return result
+            # Форматируем результат для CrewAI
+            if isinstance(result, dict):
+                if result.get("status") == "error":
+                    return {"result": str(result.get("message", "Unknown error"))}
+                return {"result": str(result.get("data", result))}
+            return {"result": str(result)}
 
         except Exception as e:
             error_msg = f"Error in database operation: {e}"
             logger.error(f"[DatabaseTool] {error_msg}")
-            return {"status": "error", "message": error_msg}
+            return {"result": error_msg}
 
     def _create_lot(self, symbol: str, qty: float, price: float) -> Dict[str, Any]:
         """Create new lot record"""
@@ -322,12 +333,17 @@ class ManagementServiceTool(BaseTool):
                 result = {"status": "error", "message": f"Unknown operation: {operation}"}
 
             logger.info(f"[ManagementServiceTool] Operation result: {result}")
-            return result
+            # Форматируем результат для CrewAI
+            if isinstance(result, dict):
+                if result.get("status") == "error":
+                    return {"result": str(result.get("message", "Unknown error"))}
+                return {"result": str(result.get("data", result))}
+            return {"result": str(result)}
 
         except Exception as e:
             error_msg = f"Error in management service operation: {e}"
             logger.error(f"[ManagementServiceTool] {error_msg}")
-            return {"status": "error", "message": error_msg}
+            return {"result": error_msg}
 
     def _get_system_status(self) -> Dict[str, Any]:
         """Get system status from management service"""
