@@ -39,31 +39,24 @@ class BybitBalanceTool(BaseTool):
         )
         self.logger = logger
 
-    def _run(self, **kwargs: Any) -> Dict[str, Any]:
-        """Synchronous version not supported"""
-        raise NotImplementedError("This tool only supports async operation")
-
-    async def _arun(self, **kwargs: Any) -> dict[str, Any] | str:
-        """Execute async balance operations"""
+    def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
+        """Execute synchronous operations"""
         try:
-
-            operation = kwargs.get("operation")
-
             if operation == "get_wallet_balance":
-                return await self._get_wallet_balance()
+                return self._get_wallet_balance()
             elif operation == "get_coin_balance":
                 symbol = kwargs.get("symbol")
-                return await self._get_coin_balance(symbol)
+                return self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
                 symbol = kwargs.get("symbol")
-                return await self._get_coin_info(symbol)
+                return self._get_coin_info(symbol)
             return {"success": False, "error": "Unknown operation"}
 
         except Exception as e:
             logger.error(f"Error in BybitBalanceTool: {e}")
             return f"Error executing operation: {str(e)}"
 
-    async def _get_wallet_balance(self) -> Dict[str, Any]:
+    def _get_wallet_balance(self) -> Dict[str, Any]:
         """Get wallet USDT balance"""
         try:
             balance_info = self.client.get_wallet_balance(
@@ -75,7 +68,7 @@ class BybitBalanceTool(BaseTool):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _get_coin_balance(self, symbol: str) -> Dict[str, Any]:
+    def _get_coin_balance(self, symbol: str) -> Dict[str, Any]:
         """Get coin balance"""
         try:
             coin = symbol[:-4]  # Remove USDT suffix
@@ -91,7 +84,7 @@ class BybitBalanceTool(BaseTool):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def _get_coin_info(self, symbol: str) -> Dict[str, Any]:
+    def _get_coin_info(self, symbol: str) -> Dict[str, Any]:
         """Get coin trading information"""
         try:
             symbol_qty_info = self.client.get_instruments_info(
@@ -109,7 +102,7 @@ class BybitBalanceTool(BaseTool):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    async def cleanup(self):
+    def cleanup(self):
         """Cleanup resources"""
         try:
             if self.client:
@@ -147,27 +140,22 @@ class BybitTradingTool(BaseTool):
         self.logger = logger
 
     def _run(self, **kwargs: Any) -> Dict[str, Any]:
-        """Synchronous version not supported"""
-        raise NotImplementedError("This tool only supports async operation")
-
-    async def _arun(self, **kwargs: Any) -> Dict[str, Any]| str:
-        """Execute async trading operations"""
+        """Execute trading operations"""
         try:
-
             operation = kwargs.get("operation")
 
             if operation == "execute_trade":
                 symbol = kwargs.get("symbol")
                 side = kwargs.get("side")
                 qty = kwargs.get("qty")
-                return await self._place_order(symbol, side, qty)
+                return self._place_order(symbol, side, qty)
             return {"success": False, "error": "Unknown operation"}
 
         except Exception as e:
             logger.error(f"Error in BybitBalanceTool: {e}")
             return f"Error executing operation: {str(e)}"
 
-    async def _set_leverage(self, symbol: str) -> Dict[str, Any]:
+    def _set_leverage(self, symbol: str) -> Dict[str, Any]:
         """Set leverage for symbol"""
         try:
             self.client.set_leverage(
@@ -185,9 +173,9 @@ class BybitTradingTool(BaseTool):
             logger.error(f"Failed to set leverage for {symbol}: {e}")
             return {"success": False, "error": str(e)}
 
-    async def _place_order(self, symbol: str, side: str, qty: float) -> Dict[str, Any]:
+    def _place_order(self, symbol: str, side: str, qty: float) -> Dict[str, Any]:
         """Place market order"""
-        leverage_result = await self._set_leverage(symbol)
+        leverage_result = self._set_leverage(symbol)
         if not leverage_result["success"]:
             return {"success": False, "error": f"Failed to set leverage: {leverage_result['error']}"}
 
@@ -214,7 +202,7 @@ class BybitTradingTool(BaseTool):
             logger.error(f"Failed to place order: {e}")
             return {"success": False, "error": str(e)}
 
-    async def cleanup(self):
+    def cleanup(self):
         """Cleanup resources"""
         try:
             if self.client:
