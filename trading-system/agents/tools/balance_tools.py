@@ -1,8 +1,6 @@
 from typing import Dict, Any, Optional, Type, List, Union, Annotated, ContextManager
 from contextlib import contextmanager
-import asyncpg
 from pybit.unified_trading import HTTP
-import aiohttp
 from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
@@ -35,7 +33,7 @@ class DatabaseTool(BaseTool):
     name: str = "database"
     description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
-    conn: Optional[psycopg2.connection] = Field(default=None, description="Database connection")
+    conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
     host: str = Field(str, description="Database host")
     port: str = Field(str, description="Database port")
     user: str = Field(str, description="Database user")
@@ -64,7 +62,7 @@ class DatabaseTool(BaseTool):
         self._initialize_tables()
 
     @contextmanager
-    def get_connection(self) -> ContextManager[psycopg2.connection]:
+    def get_connection(self) -> ContextManager[psycopg2.extensions.connection]:
         """Get database connection using context manager"""
         if not self.conn:
             try:
@@ -276,7 +274,6 @@ class ManagementServiceTool(BaseTool):
     - get_system_status: Get system status from management service
     - get_price_limit: Get price limit from management service
     - get_fake_balance: Get fake balance from management service
-    - set_fake_balance: Set fake balance in management service
     - get_num_available_lots: Get number of available lots from management service
     """
     name: str = "management_service"
@@ -312,8 +309,6 @@ class ManagementServiceTool(BaseTool):
                 return self._get_price_limit()
             elif operation == "get_fake_balance":
                 return self._get_fake_balance()
-            elif operation == "set_fake_balance":
-                return self._set_fake_balance(**kwargs)
             elif operation == "get_num_available_lots":
                 return self._get_num_available_lots()
             else:
