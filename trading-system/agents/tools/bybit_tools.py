@@ -148,12 +148,21 @@ class BybitTradingTool(BaseTool):
                 symbol = kwargs.get("symbol")
                 side = kwargs.get("side")
                 qty = kwargs.get("qty")
+                
+                # Проверяем наличие всех необходимых параметров
+                if not symbol:
+                    return {"success": False, "error": "Symbol is required"}
+                if not side:
+                    return {"success": False, "error": "Side is required"}
+                if not qty:
+                    return {"success": False, "error": "Quantity is required"}
+                
                 return self._place_order(symbol, side, qty)
             return {"success": False, "error": "Unknown operation"}
 
         except Exception as e:
-            logger.error(f"Error in BybitBalanceTool: {e}")
-            return f"Error executing operation: {str(e)}"
+            logger.error(f"Error in BybitTradingTool: {e}")
+            return {"success": False, "error": str(e)}
 
     def _set_leverage(self, symbol: str) -> Dict[str, Any]:
         """Set leverage for symbol"""

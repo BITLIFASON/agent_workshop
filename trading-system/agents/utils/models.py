@@ -44,8 +44,8 @@ class ManagementServiceInput(BaseModel):
 
 
 class BybitOperationInput(BaseModel):
-    """Base input model for Bybit operations"""
-    operation: str = Field(default="", description="Operation to perform")
+    """Input model for Bybit operations"""
+    operation: str = Field(default='', description="Operation to perform")
     params: Dict[str, Any] = Field(default_factory=dict, description="Operation parameters")
 
 
@@ -75,11 +75,11 @@ class SignalData(BaseModel):
 
 
 class CoinInfo(BaseModel):
-    """Model for coin information"""
-    max_qty: float = Field(float, description="Maximum order quantity")
-    min_qty: float = Field(float, description="Minimum order quantity")
-    step_qty: str = Field(str, description="Step size for quantity")
-    min_order_usdt: int = Field(int, description="Minimum order size in USDT")
+    """Model for coin trading information"""
+    max_qty: float = Field(description="Maximum order quantity")
+    min_qty: float = Field(description="Minimum order quantity")
+    step_qty: str = Field(default='', description="Step size for quantity")
+    min_order_usdt: int = Field(description="Minimum order size in USDT")
     extra_params: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(
@@ -89,13 +89,13 @@ class CoinInfo(BaseModel):
 
 
 class OrderResult(BaseModel):
-    """Model for order execution results"""
-    order_id: str = Field(str, description="Order ID")
-    symbol: str = Field(str, description="Trading pair symbol")
-    side: str = Field(str, description="Order side (Buy/Sell)")
-    qty: float = Field(float, description="Order quantity")
-    price: float = Field(float, description="Order price")
-    status: str = Field(str, description="Order status")
+    """Model for order execution result"""
+    order_id: str = Field(default='', description="Order ID")
+    symbol: str = Field(default='', description="Trading pair symbol")
+    side: str = Field(default='', description="Order side (Buy/Sell)")
+    qty: float = Field(description="Order quantity")
+    price: float = Field(description="Order price")
+    status: str = Field(default='', description="Order status")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -104,12 +104,12 @@ class OrderResult(BaseModel):
 
 
 class TelegramConfig(BaseModel):
-    """Telegram configuration model"""
-    api_id: int = Field(int, description="Telegram API ID")
-    api_hash: str = Field(str, description="Telegram API hash")
-    session_token: str = Field(str, description="Telegram session token")
-    channel_url: str = Field(str, description="Telegram channel URL")
-    max_retries: int = Field(int, description="Maximum number of reconnection attempts")
+    """Model for Telegram configuration"""
+    api_id: int = Field(description="Telegram API ID")
+    api_hash: str = Field(default='', description="Telegram API hash")
+    session_token: str = Field(default='', description="Telegram session token")
+    channel_url: str = Field(default='', description="Telegram channel URL")
+    max_retries: int = Field(default=3, description="Maximum number of retries")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -118,10 +118,11 @@ class TelegramConfig(BaseModel):
 
 
 class BybitConfig(BaseModel):
-    """Bybit configuration model"""
-    api_key: str = Field(str, description="Bybit API key")
-    api_secret: str = Field(str, description="Bybit API secret")
-    demo_mode: bool = Field(default=True, description="Whether to use testnet")
+    """Model for Bybit configuration"""
+    api_key: str = Field(default='', description="Bybit API key")
+    api_secret: str = Field(default='', description="Bybit API secret")
+    demo_mode: bool = Field(default=True, description="Whether to use demo mode")
+    leverage: int = Field(default=1, description="Default leverage")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -130,12 +131,12 @@ class BybitConfig(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
-    """Database configuration model"""
-    host: str = Field(str, description="Database host")
-    port: str = Field(str, description="Database port")
-    user: str = Field(str, description="Database user")
-    password: str = Field(str, description="Database password")
-    database: str = Field(str, description="Database name")
+    """Model for database configuration"""
+    host: str = Field(default='', description="Database host")
+    port: str = Field(default='', description="Database port")
+    user: str = Field(default='', description="Database user")
+    password: str = Field(default='', description="Database password")
+    database: str = Field(default='', description="Database name")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -144,10 +145,10 @@ class DatabaseConfig(BaseModel):
 
 
 class ManagementAPIConfig(BaseModel):
-    """Management API configuration model"""
-    host: str = Field(str, description="Management API host")
-    port: str = Field(str, description="Management API port")
-    token: str = Field(str, description="Management API token")
+    """Model for management API configuration"""
+    host: str = Field(default='', description="Management API host")
+    port: str = Field(default='', description="Management API port")
+    token: str = Field(default='', description="Management API token")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -156,10 +157,10 @@ class ManagementAPIConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    """LLM configuration model"""
-    provider: str = Field(str, description="LLM provider name")
-    model: str = Field(str, description="LLM model name")
-    api_key: Optional[str] = Field(None, description="LLM API key")
+    """Model for LLM configuration"""
+    provider: str = Field(default='', description="LLM provider name")
+    model: str = Field(default='', description="LLM model name")
+    api_key: str = Field(default='', description="LLM API key")
 
     model_config = ConfigDict(
         validate_assignment=True,
