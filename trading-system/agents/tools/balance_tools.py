@@ -34,11 +34,11 @@ class DatabaseTool(BaseTool):
     description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
     conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
-    host: str = Field(description="Database host")
-    port: str = Field(description="Database port")
-    user: str = Field(description="Database user")
-    password: str = Field(description="Database password")
-    database: str = Field(description="Database name")
+    host: str = Field(str, description="Database host")
+    port: str = Field(str, description="Database port")
+    user: str = Field(str, description="Database user")
+    password: str = Field(str, description="Database password")
+    database: str = Field(str, description="Database name")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -124,26 +124,34 @@ class DatabaseTool(BaseTool):
     def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Run database operation"""
         try:
+            logger.info(f"[DatabaseTool] Executing operation: {operation}")
+            logger.info(f"[DatabaseTool] Arguments: {kwargs}")
+
+            result = None
             if operation == "create_lot":
-                return self._create_lot(**kwargs)
+                result = self._create_lot(**kwargs)
             elif operation == "get_active_lots":
-                return self._get_active_lots(**kwargs)
+                result = self._get_active_lots(**kwargs)
             elif operation == "delete_lot":
-                return self._delete_lot(**kwargs)
+                result = self._delete_lot(**kwargs)
             elif operation == "create_history_lot":
-                return self._create_history_lot(**kwargs)
+                result = self._create_history_lot(**kwargs)
             elif operation == "get_symbols_active_lots":
-                return self._get_symbols_active_lots()
+                result = self._get_symbols_active_lots()
             elif operation == "get_count_lots":
-                return self._get_count_lots()
+                result = self._get_count_lots()
             elif operation == "get_qty_symbol":
-                return self._get_qty_symbol(**kwargs)
+                result = self._get_qty_symbol(**kwargs)
             else:
-                raise ValueError(f"Unknown operation: {operation}")
+                result = {"status": "error", "message": f"Unknown operation: {operation}"}
+
+            logger.info(f"[DatabaseTool] Operation result: {result}")
+            return result
 
         except Exception as e:
-            logger.error(f"Error in database operation: {e}")
-            return {"status": "error", "message": str(e)}
+            error_msg = f"Error in database operation: {e}"
+            logger.error(f"[DatabaseTool] {error_msg}")
+            return {"status": "error", "message": error_msg}
 
     def _create_lot(self, symbol: str, qty: float, price: float) -> Dict[str, Any]:
         """Create new lot record"""
@@ -274,10 +282,10 @@ class ManagementServiceTool(BaseTool):
     - get_num_available_lots: Get number of available lots from management service
     """
     args_schema: Type[BaseModel] = ManagementServiceInput
-    host: str = Field(description="Management service host")
-    port: str = Field(description="Management service port")
-    base_url: str = Field(description="Management service base URL")
-    token: str = Field(description="Management service token")
+    host: str = Field(str, description="Management service host")
+    port: str = Field(str, description="Management service port")
+    base_url: str = Field(str, description="Management service base URL")
+    token: str = Field(str, description="Management service token")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -298,33 +306,45 @@ class ManagementServiceTool(BaseTool):
     def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Run management service operation"""
         try:
+            logger.info(f"[ManagementServiceTool] Executing operation: {operation}")
+            logger.info(f"[ManagementServiceTool] Arguments: {kwargs}")
+
+            result = None
             if operation == "get_system_status":
-                return self._get_system_status()
+                result = self._get_system_status()
             elif operation == "get_price_limit":
-                return self._get_price_limit()
+                result = self._get_price_limit()
             elif operation == "get_fake_balance":
-                return self._get_fake_balance()
+                result = self._get_fake_balance()
             elif operation == "get_num_available_lots":
-                return self._get_num_available_lots()
+                result = self._get_num_available_lots()
             else:
-                raise ValueError(f"Unknown operation: {operation}")
+                result = {"status": "error", "message": f"Unknown operation: {operation}"}
+
+            logger.info(f"[ManagementServiceTool] Operation result: {result}")
+            return result
 
         except Exception as e:
-            logger.error(f"Error in management service operation: {e}")
-            return {"status": "error", "message": str(e)}
+            error_msg = f"Error in management service operation: {e}"
+            logger.error(f"[ManagementServiceTool] {error_msg}")
+            return {"status": "error", "message": error_msg}
 
     def _get_system_status(self) -> Dict[str, Any]:
         """Get system status from management service"""
         try:
+            logger.info("[ManagementServiceTool] Getting system status")
             response = requests.get(
                 f"{self.base_url}/get_system_status",
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success", "data": response.json()["system_status"]}
+            result = {"status": "success", "data": response.json()["system_status"]}
+            logger.info(f"[ManagementServiceTool] System status: {result}")
+            return result
         except Exception as e:
-            logger.error(f"Error getting system status: {e}")
-            return {"status": "error", "message": str(e)}
+            error_msg = f"Error getting system status: {e}"
+            logger.error(f"[ManagementServiceTool] {error_msg}")
+            return {"status": "error", "message": error_msg}
 
     def _get_price_limit(self) -> Dict[str, Any]:
         """Get price limit from management service"""

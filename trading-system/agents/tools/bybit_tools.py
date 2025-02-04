@@ -42,19 +42,29 @@ class BybitBalanceTool(BaseTool):
     def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Execute synchronous operations"""
         try:
+
+            logger.info(f"[BybitBalanceTool] Executing operation: {operation}")
+            logger.info(f"[BybitBalanceTool] Arguments: {kwargs}")
+
+            result = None
             if operation == "get_wallet_balance":
-                return self._get_wallet_balance()
+                result = self._get_wallet_balance()
             elif operation == "get_coin_balance":
                 symbol = kwargs.get("symbol")
-                return self._get_coin_balance(symbol)
+                result = self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
                 symbol = kwargs.get("symbol")
-                return self._get_coin_info(symbol)
-            return {"success": False, "error": "Unknown operation"}
+                result = self._get_coin_info(symbol)
+            else:
+                result = {"success": False, "error": "Unknown operation"}
+
+            logger.info(f"[BybitBalanceTool] Operation result: {result}")
+            return result
 
         except Exception as e:
-            logger.error(f"Error in BybitBalanceTool: {e}")
-            return f"Error executing operation: {str(e)}"
+            error_msg = f"Error in BybitBalanceTool: {e}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
 
     def _get_wallet_balance(self) -> Dict[str, Any]:
         """Get wallet USDT balance"""
@@ -139,11 +149,15 @@ class BybitTradingTool(BaseTool):
         )
         self.logger = logger
 
-    def _run(self, **kwargs: Any) -> Dict[str, Any]:
+
+    def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Execute trading operations"""
         try:
-            operation = kwargs.get("operation")
+            
+            logger.info(f"[BybitTradingTool] Executing operation: {operation}")
+            logger.info(f"[BybitTradingTool] Arguments: {kwargs}")
 
+            result = None
             if operation == "execute_trade":
                 symbol = kwargs.get("symbol")
                 side = kwargs.get("side")
@@ -151,18 +165,23 @@ class BybitTradingTool(BaseTool):
                 
                 # Проверяем наличие всех необходимых параметров
                 if not symbol:
-                    return {"success": False, "error": "Symbol is required"}
-                if not side:
-                    return {"success": False, "error": "Side is required"}
-                if not qty:
-                    return {"success": False, "error": "Quantity is required"}
-                
-                return self._place_order(symbol, side, qty)
-            return {"success": False, "error": "Unknown operation"}
+                    result = {"success": False, "error": "Symbol is required"}
+                elif not side:
+                    result = {"success": False, "error": "Side is required"}
+                elif not qty:
+                    result = {"success": False, "error": "Quantity is required"}
+                else:
+                    result = self._place_order(symbol, side, qty)
+            else:
+                result = {"success": False, "error": "Unknown operation"}
+
+            logger.info(f"[BybitTradingTool] Operation result: {result}")
+            return result
 
         except Exception as e:
-            logger.error(f"Error in BybitTradingTool: {e}")
-            return {"success": False, "error": str(e)}
+            error_msg = f"Error in BybitTradingTool: {e}"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
 
     def _set_leverage(self, symbol: str) -> Dict[str, Any]:
         """Set leverage for symbol"""
@@ -184,9 +203,13 @@ class BybitTradingTool(BaseTool):
 
     def _place_order(self, symbol: str, side: str, qty: float) -> Dict[str, Any]:
         """Place market order"""
+        logger.info(f"[BybitTradingTool] Placing order: symbol={symbol}, side={side}, qty={qty}")
+        
         leverage_result = self._set_leverage(symbol)
         if not leverage_result["success"]:
-            return {"success": False, "error": f"Failed to set leverage: {leverage_result['error']}"}
+            error_msg = f"Failed to set leverage: {leverage_result['error']}"
+            logger.error(f"[BybitTradingTool] {error_msg}")
+            return {"success": False, "error": error_msg}
 
         try:
             result = self.client.place_order(
@@ -205,11 +228,12 @@ class BybitTradingTool(BaseTool):
                 price=float(result["result"]["price"]),
                 status=result["result"]["orderStatus"]
             )
-            logger.info(f"Order placed successfully: {order_result}")
+            logger.info(f"[BybitTradingTool] Order placed successfully: {order_result}")
             return {"success": True, "data": order_result.model_dump()}
         except Exception as e:
-            logger.error(f"Failed to place order: {e}")
-            return {"success": False, "error": str(e)}
+            error_msg = f"Failed to place order: {e}"
+            logger.error(f"[BybitTradingTool] {error_msg}")
+            return {"success": False, "error": error_msg}
 
     def cleanup(self):
         """Cleanup resources"""
