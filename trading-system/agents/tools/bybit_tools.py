@@ -3,7 +3,7 @@ from pybit.unified_trading import HTTP
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 from loguru import logger
-from ..utils.models import BybitOperationInput, CoinInfo, OrderResult
+from ..utils.models import BybitBalanceInput, BybitExecutorInput, CoinInfo, OrderResult
 
 
 class BybitBalanceTool(BaseTool):
@@ -11,14 +11,10 @@ class BybitBalanceTool(BaseTool):
     name: str = "bybit_balance"
     description: str = """Manage balance operations on Bybit exchange.
     Supported operations:
-    - get_balance: Get current balance for a symbol
-    - get_positions: Get open positions
-    - get_leverage: Get current leverage settings
-    - set_leverage: Set leverage for a symbol
-    - get_margin_mode: Get current margin mode
-    - set_margin_mode: Set margin mode for a symbol
+    - get_coin_balance: Get coin balance, need symbol (e.g. MINAUSDT)
+    - get_coin_info: Get coin trading information, need symbol (e.g. MINAUSDT)
     """
-    args_schema: Type[BaseModel] = BybitOperationInput
+    args_schema: Type[BaseModel] = BybitBalanceInput
     client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -39,20 +35,18 @@ class BybitBalanceTool(BaseTool):
         )
         self.logger = logger
 
-    def _run(self, operation:str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run(self, operation:str, **kwargs) -> Dict[str, Any]:
         """Execute synchronous operations"""
         try:
             logger.info(f"[BybitBalanceTool] Executing operation: {operation}")
-            logger.info(f"[BybitBalanceTool] Arguments: {params}")
+            logger.info(f"[BybitBalanceTool] Arguments: {kwargs}")
 
             result = None
-            if operation == "get_wallet_balance":
-                result = self._get_wallet_balance()
-            elif operation == "get_coin_balance":
-                symbol = params.get("symbol")
+            if operation == "get_coin_balance":
+                symbol = kwargs.get("symbol")
                 result = self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
-                symbol = params.get("symbol")
+                symbol = kwargs.get("symbol")
                 result = self._get_coin_info(symbol)
             else:
                 result = {"success": False, "error": "Unknown operation"}
@@ -69,18 +63,6 @@ class BybitBalanceTool(BaseTool):
             error_msg = f"Error in BybitBalanceTool: {e}"
             logger.error(error_msg)
             return {"result": error_msg}
-
-    def _get_wallet_balance(self) -> Dict[str, Any]:
-        """Get wallet USDT balance"""
-        try:
-            balance_info = self.client.get_wallet_balance(
-                accountType="UNIFIED",
-                coin="USDT"
-            )["result"]["list"][0]["coin"][0]["walletBalance"]
-            balance_info = float(balance_info) if balance_info != '' else 0
-            return {"success": True, "data": balance_info}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
     def _get_coin_balance(self, symbol: str) -> Dict[str, Any]:
         """Get coin balance"""
@@ -133,7 +115,7 @@ class BybitTradingTool(BaseTool):
     Supported operations:
     - execute_trade: Execute a trade with given parameters (symbol, side, qty)
     """
-    args_schema: Type[BaseModel] = BybitOperationInput
+    args_schema: Type[BaseModel] = BybitExecutorInput
     client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
     logger: SkipValidation[Any] = Field(default=None, description="Logger instance")
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -154,18 +136,18 @@ class BybitTradingTool(BaseTool):
         self.logger = logger
 
 
-    def _run(self, operation: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _run(self, operation: str, **kwargs: Any) -> Dict[str, Any]:
         """Execute trading operations"""
         try:
             operation = operation
             logger.info(f"[BybitTradingTool] Executing operation: {operation}")
-            logger.info(f"[BybitTradingTool] Arguments: {params}")
+            logger.info(f"[BybitTradingTool] Arguments: {kwargs}")
 
             result = None
             if operation == "execute_trade":
-                symbol = params.get("symbol")
-                side = params.get("side")
-                qty = params.get("qty")
+                symbol = kwargs.get("symbol")
+                side = kwargs.get("side")
+                qty = kwargs.get("qty")
                 
                 # Проверяем наличие всех необходимых параметров
                 if not symbol:
@@ -223,7 +205,7 @@ class BybitTradingTool(BaseTool):
         try:
             result = self.client.place_order(
                 category="linear",
-                symbol=symbol,
+                symbol=symbol,ашч
                 side=side,
                 orderType="Market",
                 qty=qty

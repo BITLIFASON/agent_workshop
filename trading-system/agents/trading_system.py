@@ -100,10 +100,9 @@ class TradingSystem:
             )
 
             balance_control_task = Task(
-                description="""Monitor and control trading balance.
-                Verify system status and price limits.
-                Manage trading lots and ensure compliance with system limits.""",
-                expected_output="""Dict with decision trade about symbol, side and quantity""",
+                description="""Analyze the input data. Taking into account the system information,
+                it is necessary to choose the best terms of the transaction.""",
+                expected_output="""Dict with parameters order with symbol, side and quantity of coin""",
                 agent=self.balance_control_agent
             )
 
@@ -111,7 +110,7 @@ class TradingSystem:
                 description="""Execute trades on the exchange.
                 Place and manage orders with proper parameters.
                 Monitor order execution status.""",
-                expected_output="""Dict with parameters order""",
+                expected_output="""Status of order execution""",
                 agent=self.trading_agent
             )
 

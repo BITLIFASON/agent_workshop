@@ -22,22 +22,22 @@ class DatabaseTool(BaseTool):
     including managing lots, historical data, and other trading records.
     
     Supported operations:
-    - create_lot: Create new lot record
-    - delete_lot: Delete lot record
-    - create_history_lot: Create history lot record
+    - create_lot: Create new lot record with given parameters (symbol, qty, price)
+    - delete_lot: Delete lot record with given parameters (symbol)
+    - create_history_lot: Create history lot record with given parameters (action, symbol, qty, price)
     - get_symbols_active_lots: Get all active lot symbols
     - get_count_lots: Get count of active lots
-    - get_qty_symbol: Get quantity for symbol
+    - get_qty_symbol: Get quantity for symbol with given parameters (symbol)
     """
     name: str = "database"
     description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
     conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
-    host: str = Field(str, description="Database host")
-    port: str = Field(str, description="Database port")
-    user: str = Field(str, description="Database user")
-    password: str = Field(str, description="Database password")
-    database: str = Field(str, description="Database name")
+    host: str = Field(default='', description="Database host")
+    port: str = Field(default='', description="Database port")
+    user: str = Field(default='', description="Database user")
+    password: str = Field(default='', description="Database password")
+    database: str = Field(default='', description="Database name")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -288,15 +288,15 @@ class ManagementServiceTool(BaseTool):
     description: str = """Tool for management service operations.
     Supported operations:
     - get_system_status: Get system status from management service
-    - get_price_limit: Get price limit from management service
-    - get_fake_balance: Get fake balance from management service
+    - get_price_limit: Get price limit for coin from management service
+    - get_balance: Get available balance account from management service
     - get_num_available_lots: Get number of available lots from management service
     """
     args_schema: Type[BaseModel] = ManagementServiceInput
-    host: str = Field(str, description="Management service host")
-    port: str = Field(str, description="Management service port")
-    base_url: str = Field(str, description="Management service base URL")
-    token: str = Field(str, description="Management service token")
+    host: str = Field(default='', description="Management service host")
+    port: str = Field(default='', description="Management service port")
+    base_url: str = Field(default='', description="Management service base URL")
+    token: str = Field(default='', description="Management service token")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -325,8 +325,8 @@ class ManagementServiceTool(BaseTool):
                 result = self._get_system_status()
             elif operation == "get_price_limit":
                 result = self._get_price_limit()
-            elif operation == "get_fake_balance":
-                result = self._get_fake_balance()
+            elif operation == "get_balance":
+                result = self._get_balance()
             elif operation == "get_num_available_lots":
                 result = self._get_num_available_lots()
             else:
@@ -354,7 +354,7 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            result = {"status": "success", "data": response.json()["system_status"]}
+            result = {"status": "success", "data": "system is " + response.json()["system_status"]}
             logger.info(f"[ManagementServiceTool] System status: {result}")
             return result
         except Exception as e:
@@ -375,8 +375,8 @@ class ManagementServiceTool(BaseTool):
             logger.error(f"Error getting price limit: {e}")
             return {"status": "error", "message": str(e)}
 
-    def _get_fake_balance(self) -> Dict[str, Any]:
-        """Get fake balance from management service"""
+    def _get_balance(self) -> Dict[str, Any]:
+        """Get balance from management service"""
         try:
             response = requests.get(
                 f"{self.base_url}/get_fake_balance",

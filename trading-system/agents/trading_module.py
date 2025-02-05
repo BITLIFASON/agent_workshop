@@ -22,7 +22,7 @@ def create_trading_executor_agent(
     agent = Agent(
         name=name,
         role="Trading Executor",
-        goal="Execute trades on exchange accurately and efficiently",
+        goal="Execute trades on exchange reliable",
         backstory="""You are a trading executor responsible for placing and managing orders
         on the Bybit exchange. You ensure trades are executed with proper parameters and
         monitor their execution status.""",
@@ -69,10 +69,13 @@ def create_balance_controller_agent(
     agent = Agent(
         name=name,
         role="Balance Controller",
-        goal="Monitor and control trading balance",
-        backstory="""You are responsible for managing trading balances and ensuring
-        compliance with system limits. You monitor system status, verify price limits,
-        and manage trading lots.""",
+        goal="Formation of the best terms of the transaction",
+        backstory="""You are responsible for forming the terms of the transaction
+        based on information from the management system
+        and the parameters of the coin on bybit following the restrictions.
+        You also need to manage the information in the database.
+        """,
+        
         tools=[management_tool, db_tool, balance_tool],
         llm=llm,
         verbose=True,
