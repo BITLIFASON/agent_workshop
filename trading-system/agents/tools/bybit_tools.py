@@ -3,7 +3,7 @@ from pybit.unified_trading import HTTP
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 from loguru import logger
-from ..utils.models import BybitBalanceInput, BybitExecutorInput, CoinInfo, OrderResult
+from ..utils.models import BybitOperationInput, CoinInfo, OrderResult
 
 
 class BybitBalanceTool(BaseTool):
@@ -205,7 +205,7 @@ class BybitTradingTool(BaseTool):
         try:
             result = self.client.place_order(
                 category="linear",
-                symbol=symbol,ашч
+                symbol=symbol,
                 side=side,
                 orderType="Market",
                 qty=qty
