@@ -3,7 +3,7 @@ from pybit.unified_trading import HTTP
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 from loguru import logger
-from ..utils.models import BybitOperationInput, CoinInfo, OrderResult
+from ..utils.models import BybitBalanceInput, BybitExecutorInput, CoinInfo, OrderResult
 
 
 class BybitBalanceTool(BaseTool):
@@ -49,12 +49,12 @@ class BybitBalanceTool(BaseTool):
                 symbol = kwargs.get("symbol")
                 result = self._get_coin_info(symbol)
             else:
-                result = {"success": False, "error": "Unknown operation"}
+                result = {"success operation": False, "error": "Unknown operation"}
 
             logger.info(f"[BybitBalanceTool] Operation result: {result}")
-            # Форматируем результат для CrewAI
+            # Format result for CrewAI
             if isinstance(result, dict):
-                if result.get("success") is False:
+                if result.get("success operation") is False:
                     return {"result": str(result.get("error", "Unknown error"))}
                 return {"result": str(result.get("data", result))}
             return {"result": str(result)}
@@ -69,16 +69,16 @@ class BybitBalanceTool(BaseTool):
         try:
             coin = symbol[:-4]  # Remove USDT suffix
             if coin not in [item['coin'] for item in self.client.get_wallet_balance(accountType="UNIFIED")["result"]["list"][0]['coin']]:
-                return {"success": True, "data": 0}
+                return {"success operation": True, "data": 0}
             
             symbol_wallet_balance = self.client.get_wallet_balance(
                 accountType="UNIFIED",
                 coin=coin
             )["result"]["list"][0]["coin"][0]["walletBalance"]
             symbol_wallet_balance = float(symbol_wallet_balance) if symbol_wallet_balance != '' else 0
-            return {"success": True, "data": symbol_wallet_balance}
+            return {"success operation": True, "data": symbol_wallet_balance}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success operation": False, "error": str(e)}
 
     def _get_coin_info(self, symbol: str) -> Dict[str, Any]:
         """Get coin trading information"""
@@ -94,9 +94,9 @@ class BybitBalanceTool(BaseTool):
                 step_qty=symbol_qty_info.get("qtyStep"),
                 min_order_usdt=int(symbol_qty_info.get("minNotionalValue"))
             )
-            return {"success": True, "data": coin_info.model_dump()}
+            return {"success operation": True, "data": coin_info.model_dump()}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success operation": False, "error": str(e)}
 
     def cleanup(self):
         """Cleanup resources"""
@@ -114,6 +114,7 @@ class BybitTradingTool(BaseTool):
     description: str = """Execute trading operations on Bybit exchange.
     Supported operations:
     - execute_trade: Execute a trade with given parameters (symbol, side, qty)
+    - skip_trade: Skip a trade
     """
     args_schema: Type[BaseModel] = BybitExecutorInput
     client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
@@ -149,22 +150,24 @@ class BybitTradingTool(BaseTool):
                 side = kwargs.get("side")
                 qty = kwargs.get("qty")
                 
-                # Проверяем наличие всех необходимых параметров
+                # Check if all required parameters are present
                 if not symbol:
-                    result = {"success": False, "error": "Symbol is required"}
+                    result = {"success operation": False, "error": "Symbol is required"}
                 elif not side:
-                    result = {"success": False, "error": "Side is required"}
+                    result = {"success operation": False, "error": "Side is required"}
                 elif not qty:
-                    result = {"success": False, "error": "Quantity is required"}
+                    result = {"success operation": False, "error": "Quantity is required"}
                 else:
                     result = self._place_order(symbol, side, qty)
+            if operation == "skip_trade":
+                result = {"success operation": True, "data": "Trade skipped"}
             else:
-                result = {"success": False, "error": "Unknown operation"}
+                result = {"success operation": False, "error": "Unknown operation"}
 
             logger.info(f"[BybitTradingTool] Operation result: {result}")
-            # Форматируем результат для CrewAI
+            # Format result for CrewAI
             if isinstance(result, dict):
-                if result.get("success") is False:
+                if result.get("success operation") is False:
                     return {"result": str(result.get("error", "Unknown error"))}
                 return {"result": str(result.get("data", result))}
             return {"result": str(result)}
@@ -184,23 +187,23 @@ class BybitTradingTool(BaseTool):
                 sellLeverage="1"
             )
             logger.info(f"Leverage set to {1} for {symbol}")
-            return {"success": True}
+            return {"success operation": True}
         except Exception as e:
             if '110043' in str(e):
                 logger.info(f"Leverage already set to {1} for {symbol}")
-                return {"success": True}
+                return {"success operation": True}
             logger.error(f"Failed to set leverage for {symbol}: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success operation": False, "error": str(e)}
 
     def _place_order(self, symbol: str, side: str, qty: float) -> Dict[str, Any]:
         """Place market order"""
         logger.info(f"[BybitTradingTool] Placing order: symbol={symbol}, side={side}, qty={qty}")
         
         leverage_result = self._set_leverage(symbol)
-        if not leverage_result["success"]:
+        if not leverage_result["success operation"]:
             error_msg = f"Failed to set leverage: {leverage_result['error']}"
             logger.error(f"[BybitTradingTool] {error_msg}")
-            return {"success": False, "error": error_msg}
+            return {"success operation": False, "error": error_msg}
 
         try:
             result = self.client.place_order(
@@ -212,19 +215,19 @@ class BybitTradingTool(BaseTool):
             )
             
             order_result = OrderResult(
-                order_id=result["result"]["orderId"],
-                symbol=result["result"]["symbol"],
-                side=result["result"]["side"],
-                qty=float(result["result"]["qty"]),
-                price=float(result["result"]["price"]),
-                status=result["result"]["orderStatus"]
+                retCode=result["retCode"],
+                retMsg=result["retMsg"],
+                orderId=result["result"]["orderId"],
+                orderLinkId=result["orderLinkId"],
+                retExtInfo=float(result["retExtInfo"]),
+                time=result["time"]
             )
             logger.info(f"[BybitTradingTool] Order placed successfully: {order_result}")
-            return {"success": True, "data": order_result.model_dump()}
+            return {"success operation": True, "data": order_result.model_dump()}
         except Exception as e:
             error_msg = f"Failed to place order: {e}"
             logger.error(f"[BybitTradingTool] {error_msg}")
-            return {"success": False, "error": error_msg}
+            return {"success operation": False, "error": error_msg}
 
     def cleanup(self):
         """Cleanup resources"""

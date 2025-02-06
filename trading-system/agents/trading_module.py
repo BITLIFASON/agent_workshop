@@ -74,6 +74,12 @@ def create_balance_controller_agent(
         based on information from the management system
         and the parameters of the coin on bybit following the restrictions.
         You also need to manage the information in the database.
+        Your course of action
+        1) Check management system status
+        2) Check limitation of management system
+        3) Check the parameters of the coin on bybit
+        4) Form the best terms of the transaction
+        5) Add lot to the database
         """,
         
         tools=[management_tool, db_tool, balance_tool],

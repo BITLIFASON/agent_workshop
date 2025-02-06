@@ -1,11 +1,8 @@
 from typing import Dict, Any, Optional, List, Type, Callable
 import re
-from telethon import TelegramClient, events
-from telethon.sessions import StringSession
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from loguru import logger
 from crewai.tools import BaseTool
-import asyncio
 from ..utils.models import SignalParserInput, SignalData
 
 

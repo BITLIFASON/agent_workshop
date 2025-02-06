@@ -149,12 +149,12 @@ class DatabaseTool(BaseTool):
                 symbol = kwargs.get('symbol')
                 result = self._get_qty_symbol(symbol)
             else:
-                result = {"status": "error", "message": f"Unknown operation: {operation}"}
+                result = {"status": "error operation", "message": f"Unknown operation: {operation}"}
 
             logger.info(f"[DatabaseTool] Operation result: {result}")
-            # Форматируем результат для CrewAI
+            # Format result for CrewAI
             if isinstance(result, dict):
-                if result.get("status") == "error":
+                if result.get("status") == "error operation":
                     return {"result": str(result.get("message", "Unknown error"))}
                 return {"result": str(result.get("data", result))}
             return {"result": str(result)}
@@ -176,10 +176,10 @@ class DatabaseTool(BaseTool):
                         """,
                         (symbol, qty, price)
                     )
-                    return {"status": "success"}
+                    return {"status": "success operation"}
         except Exception as e:
             logger.error(f"Error creating lot: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_active_lots(self, symbol: str) -> Dict[str, Any]:
         """Get active lots for symbol"""
@@ -212,10 +212,10 @@ class DatabaseTool(BaseTool):
                         """,
                         (symbol,)
                     )
-                    return {"status": "success"}
+                    return {"status": "success operation"}
         except Exception as e:
             logger.error(f"Error deleting lot: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _create_history_lot(self, action: str, symbol: str, qty: float, price: float) -> Dict[str, Any]:
         """Create history lot record"""
@@ -229,10 +229,10 @@ class DatabaseTool(BaseTool):
                         """,
                         (action, symbol, qty, price)
                     )
-                    return {"status": "success"}
+                    return {"status": "success operation"}
         except Exception as e:
             logger.error(f"Error creating history lot: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_symbols_active_lots(self) -> Dict[str, Any]:
         """Get all active lot symbols"""
@@ -244,7 +244,7 @@ class DatabaseTool(BaseTool):
                     return {"status": "success", "data": symbols}
         except Exception as e:
             logger.error(f"Error getting active lot symbols: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_count_lots(self) -> Dict[str, Any]:
         """Get count of active lots"""
@@ -256,7 +256,7 @@ class DatabaseTool(BaseTool):
                     return {"status": "success", "data": count}
         except Exception as e:
             logger.error(f"Error getting lot count: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_qty_symbol(self, symbol: str) -> Dict[str, Any]:
         """Get quantity for symbol"""
@@ -269,11 +269,11 @@ class DatabaseTool(BaseTool):
                     )
                     result = cur.fetchone()
                     if result:
-                        return {"status": "success", "data": result[0]}
-                    return {"status": "error", "message": "Symbol not found"}
+                        return {"status": "success operation", "data": result[0]}
+                    return {"status": "error operation", "message": "Symbol not found"}
         except Exception as e:
             logger.error(f"Error getting symbol quantity: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def cleanup(self):
         """Cleanup resources"""
@@ -330,12 +330,12 @@ class ManagementServiceTool(BaseTool):
             elif operation == "get_num_available_lots":
                 result = self._get_num_available_lots()
             else:
-                result = {"status": "error", "message": f"Unknown operation: {operation}"}
+                result = {"status": "error operation", "message": f"Unknown operation: {operation}"}
 
             logger.info(f"[ManagementServiceTool] Operation result: {result}")
-            # Форматируем результат для CrewAI
+            # Format result for CrewAI
             if isinstance(result, dict):
-                if result.get("status") == "error":
+                if result.get("status") == "error operation":
                     return {"result": str(result.get("message", "Unknown error"))}
                 return {"result": str(result.get("data", result))}
             return {"result": str(result)}
@@ -354,13 +354,13 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            result = {"status": "success", "data": "system is " + response.json()["system_status"]}
+            result = {"status": "success operation", "data": "system is " + response.json()["system_status"]}
             logger.info(f"[ManagementServiceTool] System status: {result}")
             return result
         except Exception as e:
             error_msg = f"Error getting system status: {e}"
             logger.error(f"[ManagementServiceTool] {error_msg}")
-            return {"status": "error", "message": error_msg}
+            return {"status": "error operation", "message": error_msg}
 
     def _get_price_limit(self) -> Dict[str, Any]:
         """Get price limit from management service"""
@@ -370,10 +370,10 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success", "data": response.json()["price_limit"]}
+            return {"status": "success operation", "data": "price limit coin is " + str(response.json()["price_limit"])}
         except Exception as e:
             logger.error(f"Error getting price limit: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_balance(self) -> Dict[str, Any]:
         """Get balance from management service"""
@@ -383,10 +383,10 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success", "data": response.json()["fake_balance"]}
+            return {"status": "success operation", "data": "account balance is " + str(response.json()["fake_balance"])}
         except Exception as e:
             logger.error(f"Error getting fake balance: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def _get_num_available_lots(self) -> Dict[str, Any]:
         """Get number of available lots from management service"""
@@ -396,10 +396,10 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success", "data": response.json()["num_available_lots"]}
+            return {"status": "success operation", "data": "number of available lots is " + str(response.json()["num_available_lots"])}
         except Exception as e:
             logger.error(f"Error getting number of available lots: {e}")
-            return {"status": "error", "message": str(e)}
+            return {"status": "error operation", "message": str(e)}
 
     def cleanup(self):
         """Cleanup resources"""

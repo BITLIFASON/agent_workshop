@@ -59,8 +59,8 @@ class BybitExecutorInput(BaseModel):
     """Input model for Bybit operations"""
     operation: str = Field(default='', description="Operation to perform")
     symbol: Optional[str] = Field(default='', description="Trading pair symbol")
-    side: Optional[str] = Field(default='', description="Order side (Buy/Sell)")
-    qty: Optional[float] = Field(default=0, description="Order quantity")
+    side: Optional[str] = Field(default='', description="Order side [Buy, Sell]")
+    qty: Optional[int] = Field(default=0, description="Order quantity")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -97,12 +97,12 @@ class CoinInfo(BaseModel):
 
 class OrderResult(BaseModel):
     """Model for order execution result"""
-    order_id: str = Field(default='', description="Order ID")
-    symbol: str = Field(default='', description="Trading pair symbol")
-    side: str = Field(default='', description="Order side (Buy/Sell)")
-    qty: float = Field(default=0, description="Order quantity")
-    price: float = Field(default=0., description="Order price")
-    status: str = Field(default='', description="Order status")
+    retCode: int = Field(default=0, description="Return code")
+    retMsg: str = Field(default='', description="Return message")
+    orderId: str = Field(default='', description="Order ID")
+    orderLinkId: str = Field(default='', description="User customised order ID")
+    retExtInfo: Dict = Field(default={}, description="Return extended information")
+    time: int = Field(default=0, description="Time")
 
     model_config = ConfigDict(
         validate_assignment=True,
