@@ -89,10 +89,10 @@ class BybitBalanceTool(BaseTool):
             )["result"]["list"][0]["lotSizeFilter"]
             
             coin_info = CoinInfo(
-                max_qty=float(symbol_qty_info.get("maxMktOrderQty")),
-                min_qty=float(symbol_qty_info.get("minOrderQty")),
-                step_qty=symbol_qty_info.get("qtyStep"),
-                min_order_usdt=int(symbol_qty_info.get("minNotionalValue"))
+                maxOrderQty=float(symbol_qty_info.get("maxMktOrderQty")),
+                minOrderQty=float(symbol_qty_info.get("minOrderQty")),
+                qtyStep=symbol_qty_info.get("qtyStep"),
+                minNotionalValue=int(symbol_qty_info.get("minNotionalValue"))
             )
             return {"success operation": True, "data": coin_info.model_dump()}
         except Exception as e:
@@ -159,7 +159,7 @@ class BybitTradingTool(BaseTool):
                     result = {"success operation": False, "error": "Quantity is required"}
                 else:
                     result = self._place_order(symbol, side, qty)
-            if operation == "skip_trade":
+            elif operation == "skip_trade":
                 result = {"success operation": True, "data": "Trade skipped"}
             else:
                 result = {"success operation": False, "error": "Unknown operation"}

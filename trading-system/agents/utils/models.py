@@ -33,10 +33,10 @@ class DatabaseOperationInput(BaseModel):
         default='',
         description="Operation to perform (get_active_lots, create_lot, delete_lot, create_history_lot)"
     )
-    symbol: Optional[str] = Field('', description="Trading pair symbol")
-    qty: Optional[float] = Field(0, description="Order quantity")
-    price: Optional[float] = Field(0., description="Order price")
     action: Optional[str] = Field('', description="Action type [Buy, Sell] (for history lots)")
+    symbol: Optional[str] = Field('', description="Trading pair symbol")
+    qty: Optional[float] = Field(0., description="Order quantity")
+    price: Optional[float] = Field(0., description="Order price")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -60,7 +60,7 @@ class BybitExecutorInput(BaseModel):
     operation: str = Field(default='', description="Operation to perform")
     symbol: Optional[str] = Field(default='', description="Trading pair symbol")
     side: Optional[str] = Field(default='', description="Order side [Buy, Sell]")
-    qty: Optional[int] = Field(default=0, description="Order quantity")
+    qty: Optional[float] = Field(default=0., description="Order quantity")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -84,10 +84,10 @@ class SignalData(BaseModel):
 
 class CoinInfo(BaseModel):
     """Model for coin trading information"""
-    max_qty: float = Field(default=0., description="Maximum order quantity")
-    min_qty: float = Field(default=0., description="Minimum order quantity")
-    step_qty: str = Field(default='', description="Step size for quantity")
-    min_order_usdt: int = Field(default=0, description="Minimum order size in USDT")
+    maxOrderQty: str = Field(default='1', description="Maximum order coin quantity")
+    minOrderQty: str = Field(default='1', description="Minimum order coin quantity")
+    qtyStep: str = Field(default='1', description="Accuracy of quantity coin")
+    minNotionalValue: str = Field(default='5', description="Minimum order size in USDT")
 
     model_config = ConfigDict(
         validate_assignment=True,

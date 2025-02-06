@@ -25,7 +25,9 @@ def create_trading_executor_agent(
         goal="Execute trades on exchange reliable",
         backstory="""You are a trading executor responsible for placing and managing orders
         on the Bybit exchange. You ensure trades are executed with proper parameters and
-        monitor their execution status.""",
+        monitor their execution status.
+        (if you have a lot the coin in database you don't must execute "Buy" the trade)
+        (if quantity coin is zero you must execute skip the trade)""",
         tools=[trading_tool],
         llm=llm,
         verbose=True,
@@ -74,12 +76,18 @@ def create_balance_controller_agent(
         based on information from the management system
         and the parameters of the coin on bybit following the restrictions.
         You also need to manage the information in the database.
-        Your course of action
+        Your course of action:
         1) Check management system status
+        (if system is disable you must install coin quantity is zero and don't add lot to database)
         2) Check limitation of management system
-        3) Check the parameters of the coin on bybit
-        4) Form the best terms of the transaction
-        5) Add lot to the database
+        (if system limitation is not follow you must install coin quantity is zero)
+        3) Check lots in database
+        (if you have a lot the coin in database you must install coin quantity is zero)
+        4) Check the parameters of the coin on bybit
+        5) Form the best terms of the transaction
+        (distribute the balance evenly between the lots)
+        6) Add lot to "active_lots" and "history_lots" tables in database
+        (if coin quantity is zero you don't have lot to database)
         """,
         
         tools=[management_tool, db_tool, balance_tool],

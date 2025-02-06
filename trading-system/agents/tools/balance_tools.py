@@ -181,6 +181,23 @@ class DatabaseTool(BaseTool):
             logger.error(f"Error creating lot: {e}")
             return {"status": "error operation", "message": str(e)}
 
+    def _create_history_lot(self, action: str, symbol: str, qty: float, price: float) -> Dict[str, Any]:
+        """Create history lot record"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO history_lots (action, symbol, qty, price)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (action, symbol, qty, price)
+                    )
+                    return {"status": "success operation"}
+        except Exception as e:
+            logger.error(f"Error creating history lot: {e}")
+            return {"status": "error operation", "message": str(e)}
+
     def _get_active_lots(self, symbol: str) -> Dict[str, Any]:
         """Get active lots for symbol"""
         try:
@@ -215,23 +232,6 @@ class DatabaseTool(BaseTool):
                     return {"status": "success operation"}
         except Exception as e:
             logger.error(f"Error deleting lot: {e}")
-            return {"status": "error operation", "message": str(e)}
-
-    def _create_history_lot(self, action: str, symbol: str, qty: float, price: float) -> Dict[str, Any]:
-        """Create history lot record"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO history_lots (action, symbol, qty, price)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (action, symbol, qty, price)
-                    )
-                    return {"status": "success operation"}
-        except Exception as e:
-            logger.error(f"Error creating history lot: {e}")
             return {"status": "error operation", "message": str(e)}
 
     def _get_symbols_active_lots(self) -> Dict[str, Any]:
