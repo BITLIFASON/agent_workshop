@@ -11,7 +11,7 @@ class BybitBalanceTool(BaseTool):
     name: str = "bybit_balance"
     description: str = """Manage balance operations on Bybit exchange.
     Supported operations:
-    - get_coin_balance: Get coin balance, need symbol (e.g. MINAUSDT)
+    - get_current_coin_balance: Get coin balance, need symbol (e.g. MINAUSDT)
     - get_coin_info: Get coin trading information, need symbol (e.g. MINAUSDT)
     """
     args_schema: Type[BaseModel] = BybitBalanceInput
@@ -42,7 +42,7 @@ class BybitBalanceTool(BaseTool):
             logger.info(f"[BybitBalanceTool] Arguments: {kwargs}")
 
             result = None
-            if operation == "get_coin_balance":
+            if operation == "get_current_coin_balance":
                 symbol = kwargs.get("symbol")
                 result = self._get_coin_balance(symbol)
             elif operation == "get_coin_info":
@@ -89,10 +89,10 @@ class BybitBalanceTool(BaseTool):
             )["result"]["list"][0]["lotSizeFilter"]
             
             coin_info = CoinInfo(
-                maxOrderQty=float(symbol_qty_info.get("maxMktOrderQty")),
-                minOrderQty=float(symbol_qty_info.get("minOrderQty")),
+                maxOrderQty=symbol_qty_info.get("maxMktOrderQty"),
+                minOrderQty=symbol_qty_info.get("minOrderQty"),
                 qtyStep=symbol_qty_info.get("qtyStep"),
-                minNotionalValue=int(symbol_qty_info.get("minNotionalValue"))
+                minNotionalValue=symbol_qty_info.get("minNotionalValue")
             )
             return {"success operation": True, "data": coin_info.model_dump()}
         except Exception as e:
@@ -219,7 +219,7 @@ class BybitTradingTool(BaseTool):
                 retMsg=result["retMsg"],
                 orderId=result["result"]["orderId"],
                 orderLinkId=result["orderLinkId"],
-                retExtInfo=float(result["retExtInfo"]),
+                retExtInfo=result["retExtInfo"],
                 time=result["time"]
             )
             logger.info(f"[BybitTradingTool] Order placed successfully: {order_result}")

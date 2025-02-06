@@ -31,7 +31,7 @@ def create_trading_executor_agent(
         tools=[trading_tool],
         llm=llm,
         verbose=True,
-        max_iter=2
+        max_iter=3
     )
     
     return agent
@@ -79,11 +79,12 @@ def create_balance_controller_agent(
         Your course of action:
         1) Check management system status
         (if system is disable you must install coin quantity is zero and don't add lot to database)
-        2) Check limitation of management system
+        2) Check limitation of management system (available balance, available lots, price limit)
         (if system limitation is not follow you must install coin quantity is zero)
         3) Check lots in database
         (if you have a lot the coin in database you must install coin quantity is zero)
         4) Check the parameters of the coin on bybit
+        (if coin parameters is not follow (maxOrderQty, minOrderQty, minNotionalValue) you must install coin quantity is zero)
         5) Form the best terms of the transaction
         (distribute the balance evenly between the lots)
         6) Add lot to "active_lots" and "history_lots" tables in database
@@ -93,7 +94,7 @@ def create_balance_controller_agent(
         tools=[management_tool, db_tool, balance_tool],
         llm=llm,
         verbose=True,
-        max_iter=6
+        max_iter=10
     )
     
     return agent

@@ -16,21 +16,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class DatabaseTool(BaseTool):
-    """Tool for database operations.
-    
-    This tool provides functionality to interact with the database,
-    including managing lots, historical data, and other trading records.
-    
+    """Tool for database operations."""
+    name: str = "database"
+    description: str = """Tool for database operations.
     Supported operations:
     - create_lot: Create new lot record with given parameters (symbol, qty, price)
     - delete_lot: Delete lot record with given parameters (symbol)
     - create_history_lot: Create history lot record with given parameters (action, symbol, qty, price)
-    - get_symbols_active_lots: Get all active lot symbols
+    - get_symbols_active_lots: Get symbols of active lots
     - get_count_lots: Get count of active lots
-    - get_qty_symbol: Get quantity for symbol with given parameters (symbol)
+    - get_qty_symbol_active_lot: Get quantity for symbol of active lot with given parameters (symbol)
     """
-    name: str = "database"
-    description: str = "Tool for database operations"
     args_schema: Type[BaseModel] = DatabaseOperationInput
     conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
     host: str = Field(default='', description="Database host")
@@ -197,25 +193,6 @@ class DatabaseTool(BaseTool):
         except Exception as e:
             logger.error(f"Error creating history lot: {e}")
             return {"status": "error operation", "message": str(e)}
-
-    def _get_active_lots(self, symbol: str) -> Dict[str, Any]:
-        """Get active lots for symbol"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        """
-                        SELECT * FROM active_lots
-                        WHERE symbol = %s
-                        ORDER BY created_at ASC
-                        """,
-                        (symbol,)
-                    )
-                    lots = cur.fetchall()
-                    return {"status": "success", "data": lots}
-        except Exception as e:
-            logger.error(f"Error getting active lots: {e}")
-            return {"status": "error", "message": str(e)}
 
     def _delete_lot(self, symbol: str) -> Dict[str, Any]:
         """Delete lot record"""

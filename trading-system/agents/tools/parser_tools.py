@@ -7,16 +7,7 @@ from ..utils.models import SignalParserInput, SignalData
 
 
 class SignalParserTool(BaseTool):
-    """Tool for parsing trading signals from text messages.
-    
-    This tool is responsible for parsing and validating trading signals
-    from text messages in specific formats. It handles both buy and sell
-    signals with their respective parameters.
-    
-    Handles two specific formats:
-    Buy: ⬆️ SYMBOL BUY LONG PRICE: X.XXXX
-    Sell: ✔️ SYMBOL 🟢 PROFIT: +/-XX.XX% CLOSE LONG PRICE: X.XXXX
-    """
+    """Tool for parsing trading signals from text messages."""
     name: str = "signal_parser"
     description: str = """Parse trading signals from text messages.
     Handles two specific formats:
@@ -31,8 +22,8 @@ class SignalParserTool(BaseTool):
     def __init__(self, **kwargs):
         """Initialize SignalParserTool"""
         super().__init__(**kwargs)
-        self.buy_pattern = re.compile(r'⬆️\s+(\w+)\s+BUY\s+LONG\s+PRICE:\s+(\d+\.\d+)')
-        self.sell_pattern = re.compile(r'.\s(\w+)\s+(?:🟢|🔴)\sPROFIT:\s+((?:[+-]\s*)?\d+\.\d+)\%\sCLOSE LONG PRICE:\s+(\d+\.\d+)')
+        self.buy_pattern = re.compile(r'.\s(\w+)\s+BUY LONG PRICE:\s+(\d+\.\d+)')
+        self.sell_pattern = re.compile(r'.\s(\w+)\s+..\sPROFIT:\s+(.\s*\d+\.\d+)\%\sCLOSE LONG PRICE:\s+(\d+\.\d+)')
 
     def _parse_buy_signal(self, text: str) -> Optional[Dict[str, Any]]:
         """Parse buy signal message"""

@@ -13,12 +13,11 @@ class SignalParserInput(BaseModel):
     )
 
 
-
 class ManagementServiceInput(BaseModel):
     """Input schema for ManagementServiceTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (get_system_status, get_price_limit, get_fake_balance, get_num_available_lots)"
+        description="Operation to perform (get_system_status, get_price_limit, get_balance, get_num_available_lots)"
     )
 
     model_config = ConfigDict(
@@ -31,7 +30,7 @@ class DatabaseOperationInput(BaseModel):
     """Input schema for DatabaseTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (get_active_lots, create_lot, delete_lot, create_history_lot)"
+        description="Operation to perform (create_lot, delete_lot, create_history_lot, get_symbols_active_lots, get_count_lots, get_qty_symbol_active_lot)"
     )
     action: Optional[str] = Field('', description="Action type [Buy, Sell] (for history lots)")
     symbol: Optional[str] = Field('', description="Trading pair symbol")
