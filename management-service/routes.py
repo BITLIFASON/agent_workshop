@@ -179,7 +179,7 @@ async def api_get_active_lots(request: Request, api_key: str):
     """
     try:
         validate_token(api_key)
-        return await fetch_active_lots(request)
+        return await fetch_active_lots()
     except Exception as e:
         logger.error(f"Error fetching active lots: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch active lots: {str(e)}")
