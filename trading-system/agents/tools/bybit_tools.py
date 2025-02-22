@@ -13,6 +13,7 @@ class BybitBalanceTool(BaseTool):
     Supported operations:
     - get_current_coin_balance: Get coin balance, need symbol (e.g. MINAUSDT)
     - get_coin_info: Get coin trading information, need symbol (e.g. MINAUSDT)
+    - skip_balance_operation: Skip balance operation
     """
     args_schema: Type[BaseModel] = BybitBalanceInput
     client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
@@ -48,6 +49,8 @@ class BybitBalanceTool(BaseTool):
             elif operation == "get_coin_info":
                 symbol = kwargs.get("symbol")
                 result = self._get_coin_info(symbol)
+            elif operation == "skip_balance_operation":
+                result = {"success operation": True, "data": "Balance operation skipped"}
             else:
                 result = {"success operation": False, "error": "Unknown operation"}
 
@@ -114,7 +117,7 @@ class BybitTradingTool(BaseTool):
     description: str = """Execute trading operations on Bybit exchange.
     Supported operations:
     - execute_trade: Execute a trade with given parameters (symbol, side, qty)
-    - skip_trade: Skip a trade
+    - skip_trade_operation: Skip a trade operation
     """
     args_schema: Type[BaseModel] = BybitExecutorInput
     client: Type[HTTP] | None = Field(default=None, description="Bybit HTTP client")
@@ -159,7 +162,7 @@ class BybitTradingTool(BaseTool):
                     result = {"success operation": False, "error": "Quantity is required"}
                 else:
                     result = self._place_order(symbol, side, qty)
-            elif operation == "skip_trade":
+            elif operation == "skip_trade_operation":
                 result = {"success operation": True, "data": "Trade skipped"}
             else:
                 result = {"success operation": False, "error": "Unknown operation"}

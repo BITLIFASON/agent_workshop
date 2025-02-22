@@ -25,26 +25,26 @@ class SignalParserTool(BaseTool):
         self.buy_pattern = re.compile(r'.\s(\w+)\s+BUY LONG PRICE:\s+(\d+\.\d+)')
         self.sell_pattern = re.compile(r'.\s(\w+)\s+..\sPROFIT:\s+(.\s*\d+\.\d+)\%\sCLOSE LONG PRICE:\s+(\d+\.\d+)')
 
-    def _parse_buy_signal(self, text: str) -> Optional[Dict[str, Any]]:
+    def _parse_buy_signal(self, message: str) -> Optional[Dict[str, Any]]:
         """Parse buy signal message"""
         try:
-            match = self.buy_pattern.search(text)
+            match = self.buy_pattern.search(message)
             if not match:
                 return None
                 
             return {
                 "symbol": match.group(1),
-                "action": "buy",
+                "side": "Buy",
                 "price": float(match.group(2))
             }
         except Exception as e:
             logger.error(f"Error parsing buy signal: {e}")
             return None
 
-    def _parse_sell_signal(self, text: str) -> Optional[Dict[str, Any]]:
+    def _parse_sell_signal(self, message: str) -> Optional[Dict[str, Any]]:
         """Parse sell signal message"""
         try:
-            match = self.sell_pattern.search(text)
+            match = self.sell_pattern.search(message)
             if not match:
                 return None
                 
@@ -54,7 +54,7 @@ class SignalParserTool(BaseTool):
                 
             return {
                 "symbol": match.group(1),
-                "action": "sell",
+                "side": "Sell",
                 "price": float(match.group(3)),
                 "profit_percentage": float(profit_str)
             }
@@ -62,27 +62,23 @@ class SignalParserTool(BaseTool):
             logger.error(f"Error parsing sell signal: {e}")
             return None
 
-    def _run(self, message: str) -> Optional[SignalData]:
+    def _run(self, text_message: str) -> Optional[SignalData]:
         """Parse trading signal from message text"""
         try:
-            signal_data = self._parse_buy_signal(message)
+            signal_data = self._parse_buy_signal(text_message)
             if not signal_data:
-                signal_data = self._parse_sell_signal(message)
+                signal_data = self._parse_sell_signal(text_message)
 
             if signal_data:
                 logger.info(f"Successfully parsed signal: {signal_data}")
                 return SignalData(**signal_data)
             
-            logger.warning(f"Failed to parse message: {message}")
+            logger.warning(f"Failed to parse message: {text_message}")
             return None
 
         except Exception as e:
             logger.error(f"Error parsing signal: {e}")
             return None
-
-    async def _arun(self, message: str) -> Optional[SignalData]:
-        """Async version of _run"""
-        return self._run(message)
 
     async def cleanup(self):
         """Cleanup resources"""

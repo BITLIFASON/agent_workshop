@@ -65,7 +65,8 @@ class TelegramParser:
             async def new_message_handler(event):
                 message = event.message
                 text_message = message.message
-                await self.crew.kickoff_async({"message": text_message})
+                logger.info(f"Message was handled: {text_message}")
+                await self.crew.kickoff_async({"text_message": text_message})
 
             if not self.telegram_client.is_connected():
                 max_retries_telegram = 0

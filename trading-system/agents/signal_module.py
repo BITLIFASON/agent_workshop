@@ -16,9 +16,9 @@ def create_signal_parser_agent(
     agent = Agent(
         name=name,
         role="Signal Parser",
-        goal="Parse trading signal",
+        goal="Parse trading signal '{text_message}'",
         backstory="""You are a signal parser responsible for monitoring Telegram channels,extracting trading signals.
-        You receive message and need to extract the symbol, action, price and profit percentage from them.""",
+        You receive message and need to extract the symbol, side, price and profit percentage from them.""",
         tools=[parser_tool],
         llm=llm,
         verbose=True,

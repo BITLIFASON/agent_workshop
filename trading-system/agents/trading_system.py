@@ -7,6 +7,7 @@ from .signal_module import create_signal_parser_agent, cleanup_signal_tools
 from .trading_module import (
     create_trading_executor_agent,
     create_balance_controller_agent,
+    create_write_info_agent
 )
 from .utils.llm_providers import LLMProvider, LLMFactory
 from .utils.models import (
@@ -59,10 +60,10 @@ class TradingSystem:
     def _create_agents(self):
         """Create agent instances"""
         try:
-            # Create Trading Agent first since it's used as a callback
-            self.trading_agent = create_trading_executor_agent(
-                name="trading_executor",
-                bybit_config=self.config.bybit.model_dump(),
+
+            # Create Parser Agent
+            self.parser_agent = create_signal_parser_agent(
+                name="signal_parser",
                 llm=self.llm
             )
 
@@ -77,9 +78,18 @@ class TradingSystem:
                 llm=self.llm
             )
 
-            # Create Parser Agent last since it depends on Balance Control Agent
-            self.parser_agent = create_signal_parser_agent(
-                name="signal_parser",
+            # Create Trading Agent
+            self.trading_agent = create_trading_executor_agent(
+                name="trading_executor",
+                bybit_config=self.config.bybit.model_dump(),
+                llm=self.llm
+            )
+
+            self.writer_info_agent = create_write_info_agent(
+                name="balance_controller",
+                config={
+                    "database": self.config.database.model_dump()
+                },
                 llm=self.llm
             )
 
@@ -91,18 +101,17 @@ class TradingSystem:
         """Create and configure the trading crew"""
         try:
             # Create tasks for each agent
-            signal_monitoring_task = Task(
-                description="""Monitor Telegram channels for trading signals. 
-                Parse incoming messages and extract trading information.
+            signal_parsing_task = Task(
+                description="""Parse incoming messages and extract trading information.
                 Validate signal format and content.""",
-                expected_output="""Dict with parse signal params""",
+                expected_output="""Dict with parse signal params (symbol, side, price)""",
                 agent=self.parser_agent
             )
 
             balance_control_task = Task(
-                description="""Analyze the input data. Taking into account the system information,
-                it is necessary to choose the best terms of the transaction.""",
-                expected_output="""Dict with parameters order with symbol, side and quantity of coin""",
+                description="""Using the input data and taking into account the information from the database 
+                and the management service, it is necessary to calculate the best coin quantity.""",
+                expected_output="""Dict with parameters order (symbol, side, qty, price)""",
                 agent=self.balance_control_agent
             )
 
@@ -110,14 +119,22 @@ class TradingSystem:
                 description="""Execute trades on the exchange.
                 Place and manage orders with proper parameters.
                 Monitor order execution status.""",
-                expected_output="""Status of order execution""",
+                expected_output="""Result parameters of order (side, symbol, qty, price)""",
                 agent=self.trading_agent
+            )
+
+            writing_info_task = Task(
+                description="""Write info about order to database.
+                Place and manage orders with proper parameters.
+                Monitor order execution status.""",
+                expected_output="""Status of database operations""",
+                agent=self.writer_info_agent
             )
 
             # Create crew with defined tasks
             self.crew = Crew(
-                agents=[self.parser_agent, self.balance_control_agent, self.trading_agent],
-                tasks=[signal_monitoring_task, balance_control_task, trading_execution_task],
+                agents=[self.parser_agent, self.balance_control_agent, self.trading_agent, self.writer_info_agent],
+                tasks=[signal_parsing_task, balance_control_task, trading_execution_task, writing_info_task],
                 process=Process.sequential,
                 verbose=True
             )

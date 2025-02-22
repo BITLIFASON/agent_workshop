@@ -5,7 +5,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, field_validator, SkipValidation
 from crewai.tools import BaseTool
 import logging
-from ..utils.models import DatabaseOperationInput, ManagementServiceInput
+from ..utils.models import ReadDatabaseOperationInput, ManagementServiceInput
 import requests
 import psycopg2
 import psycopg2.extras
@@ -15,19 +15,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class DatabaseTool(BaseTool):
+class ReadDatabaseTool(BaseTool):
     """Tool for database operations."""
     name: str = "database"
     description: str = """Tool for database operations.
     Supported operations:
-    - create_lot: Create new lot record with given parameters (symbol, qty, price)
-    - delete_lot: Delete lot record with given parameters (symbol)
-    - create_history_lot: Create history lot record with given parameters (action, symbol, qty, price)
     - get_symbols_active_lots: Get symbols of active lots
-    - get_count_lots: Get count of active lots
+    - get_count_active_lots: Get count of active lots
     - get_qty_symbol_active_lot: Get quantity for symbol of active lot with given parameters (symbol)
     """
-    args_schema: Type[BaseModel] = DatabaseOperationInput
+    args_schema: Type[BaseModel] = ReadDatabaseOperationInput
     conn: Optional[psycopg2.extensions.connection] = Field(default=None, description="Database connection")
     host: str = Field(default='', description="Database host")
     port: str = Field(default='', description="Database port")
@@ -105,7 +102,7 @@ class DatabaseTool(BaseTool):
         create_table_query = """
         CREATE TABLE IF NOT EXISTS history_lots (
             id SERIAL PRIMARY KEY,
-            action VARCHAR(50) NOT NULL,
+            side VARCHAR(50) NOT NULL,
             symbol VARCHAR(50) NOT NULL,
             qty NUMERIC(20, 8) NOT NULL,
             price NUMERIC(20, 8) NOT NULL,
@@ -123,24 +120,10 @@ class DatabaseTool(BaseTool):
             logger.info(f"[DatabaseTool] Arguments: {kwargs}")
 
             result = None
-            if operation == "create_lot":
-                symbol = kwargs.get('symbol')
-                qty = kwargs.get('qty')
-                price = kwargs.get('price')
-                result = self._create_lot(symbol, qty, price)
-            elif operation == "delete_lot":
-                symbol = kwargs.get('symbol')
-                result = self._delete_lot(symbol)
-            elif operation == "create_history_lot":
-                action = kwargs.get('action')
-                symbol = kwargs.get('symbol')
-                qty = kwargs.get('qty')
-                price = kwargs.get('price')
-                result = self._create_history_lot(action, symbol, qty, price)
-            elif operation == "get_symbols_active_lots":
+            if operation == "get_symbols_active_lots":
                 result = self._get_symbols_active_lots()
-            elif operation == "get_count_lots":
-                result = self._get_count_lots()
+            elif operation == "get_count_active_lots":
+                result = self._get_count_active_lots()
             elif operation == "get_qty_symbol":
                 symbol = kwargs.get('symbol')
                 result = self._get_qty_symbol(symbol)
@@ -160,57 +143,6 @@ class DatabaseTool(BaseTool):
             logger.error(f"[DatabaseTool] {error_msg}")
             return {"result": error_msg}
 
-    def _create_lot(self, symbol: str, qty: float, price: float) -> Dict[str, Any]:
-        """Create new lot record"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO active_lots (symbol, qty, price)
-                        VALUES (%s, %s, %s)
-                        """,
-                        (symbol, qty, price)
-                    )
-                    return {"status": "success operation"}
-        except Exception as e:
-            logger.error(f"Error creating lot: {e}")
-            return {"status": "error operation", "message": str(e)}
-
-    def _create_history_lot(self, action: str, symbol: str, qty: float, price: float) -> Dict[str, Any]:
-        """Create history lot record"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO history_lots (action, symbol, qty, price)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (action, symbol, qty, price)
-                    )
-                    return {"status": "success operation"}
-        except Exception as e:
-            logger.error(f"Error creating history lot: {e}")
-            return {"status": "error operation", "message": str(e)}
-
-    def _delete_lot(self, symbol: str) -> Dict[str, Any]:
-        """Delete lot record"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        DELETE FROM active_lots
-                        WHERE symbol = %s
-                        """,
-                        (symbol,)
-                    )
-                    return {"status": "success operation"}
-        except Exception as e:
-            logger.error(f"Error deleting lot: {e}")
-            return {"status": "error operation", "message": str(e)}
-
     def _get_symbols_active_lots(self) -> Dict[str, Any]:
         """Get all active lot symbols"""
         try:
@@ -223,7 +155,7 @@ class DatabaseTool(BaseTool):
             logger.error(f"Error getting active lot symbols: {e}")
             return {"status": "error operation", "message": str(e)}
 
-    def _get_count_lots(self) -> Dict[str, Any]:
+    def _get_count_active_lots(self) -> Dict[str, Any]:
         """Get count of active lots"""
         try:
             with self.get_connection() as conn:
@@ -267,7 +199,7 @@ class ManagementServiceTool(BaseTool):
     - get_system_status: Get system status from management service
     - get_price_limit: Get price limit for coin from management service
     - get_balance: Get available balance account from management service
-    - get_num_available_lots: Get number of available lots from management service
+    - get_max_num_available_lots: Get maximum number of available lots from management service
     """
     args_schema: Type[BaseModel] = ManagementServiceInput
     host: str = Field(default='', description="Management service host")
@@ -304,8 +236,8 @@ class ManagementServiceTool(BaseTool):
                 result = self._get_price_limit()
             elif operation == "get_balance":
                 result = self._get_balance()
-            elif operation == "get_num_available_lots":
-                result = self._get_num_available_lots()
+            elif operation == "get_max_num_available_lots":
+                result = self._get_max_num_available_lots()
             else:
                 result = {"status": "error operation", "message": f"Unknown operation: {operation}"}
 
@@ -365,17 +297,17 @@ class ManagementServiceTool(BaseTool):
             logger.error(f"Error getting fake balance: {e}")
             return {"status": "error operation", "message": str(e)}
 
-    def _get_num_available_lots(self) -> Dict[str, Any]:
-        """Get number of available lots from management service"""
+    def _get_max_num_available_lots(self) -> Dict[str, Any]:
+        """Get maximum number of available lots from management service"""
         try:
             response = requests.get(
                 f"{self.base_url}/get_num_available_lots",
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success operation", "data": "number of available lots is " + str(response.json()["num_available_lots"])}
+            return {"status": "success operation", "data": "maximum number of available lots is " + str(response.json()["num_available_lots"])}
         except Exception as e:
-            logger.error(f"Error getting number of available lots: {e}")
+            logger.error(f"Error getting maximum number of available lots: {e}")
             return {"status": "error operation", "message": str(e)}
 
     def cleanup(self):

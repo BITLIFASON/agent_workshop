@@ -5,7 +5,7 @@ from datetime import datetime
 
 class SignalParserInput(BaseModel):
     """Input schema for SignalParserTool"""
-    message: str = Field(default='', description="Message text to parse for trading signals")
+    text_message: str = Field(default='', description="Message text to parse for trading signals")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -26,13 +26,27 @@ class ManagementServiceInput(BaseModel):
     )
 
 
-class DatabaseOperationInput(BaseModel):
-    """Input schema for DatabaseTool"""
+class ReadDatabaseOperationInput(BaseModel):
+    """Input schema for ReadDatabaseTool"""
     operation: str = Field(
         default='',
         description="Operation to perform (create_lot, delete_lot, create_history_lot, get_symbols_active_lots, get_count_lots, get_qty_symbol_active_lot)"
     )
-    action: Optional[str] = Field('', description="Action type [Buy, Sell] (for history lots)")
+    symbol: Optional[str] = Field('', description="Trading pair symbol")
+
+    model_config = ConfigDict(
+        validate_assignment=True,
+        frozen=True
+    )
+
+
+class WriteDatabaseOperationInput(BaseModel):
+    """Input schema for WriteDatabaseTool"""
+    operation: str = Field(
+        default='',
+        description="Operation to perform (create_lot, delete_lot, create_history_lot, get_symbols_active_lots, get_count_lots, get_qty_symbol_active_lot)"
+    )
+    side: Optional[str] = Field('', description="Side type [Buy, Sell] (for history lots)")
     symbol: Optional[str] = Field('', description="Trading pair symbol")
     qty: Optional[float] = Field(0., description="Order quantity")
     price: Optional[float] = Field(0., description="Order price")
@@ -60,6 +74,7 @@ class BybitExecutorInput(BaseModel):
     symbol: Optional[str] = Field(default='', description="Trading pair symbol")
     side: Optional[str] = Field(default='', description="Order side [Buy, Sell]")
     qty: Optional[float] = Field(default=0., description="Order quantity")
+    price: Optional[float] = Field(default=0., description="Order coin price")
 
     model_config = ConfigDict(
         validate_assignment=True,
@@ -70,7 +85,7 @@ class BybitExecutorInput(BaseModel):
 class SignalData(BaseModel):
     """Model for parsed trading signals"""
     symbol: str = Field(default='', description="Trading pair symbol (e.g., 'MINAUSDT')")
-    action: str = Field(default='', description="Trading action [Buy, Sell]")
+    side: str = Field(default='', description="Trading side [Buy, Sell]")
     price: float = Field(default=0., description="Entry or exit price for the trade")
     profit_percentage: Optional[float] = Field(0., description="Profit percentage for sell signals")
     timestamp: datetime = Field(default_factory=datetime.now)
