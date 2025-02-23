@@ -124,9 +124,9 @@ class ReadDatabaseTool(BaseTool):
                 result = self._get_symbols_active_lots()
             elif operation == "get_count_active_lots":
                 result = self._get_count_active_lots()
-            elif operation == "get_qty_symbol":
+            elif operation == "get_qty_symbol_active_lot":
                 symbol = kwargs.get('symbol')
-                result = self._get_qty_symbol(symbol)
+                result = self._get_qty_symbol_active_lotl(symbol)
             else:
                 result = {"status": "error operation", "message": f"Unknown operation: {operation}"}
 
@@ -167,7 +167,7 @@ class ReadDatabaseTool(BaseTool):
             logger.error(f"Error getting lot count: {e}")
             return {"status": "error operation", "message": str(e)}
 
-    def _get_qty_symbol(self, symbol: str) -> Dict[str, Any]:
+    def _get_qty_symbol_active_lot(self, symbol: str) -> Dict[str, Any]:
         """Get quantity for symbol"""
         try:
             with self.get_connection() as conn:
@@ -279,7 +279,7 @@ class ManagementServiceTool(BaseTool):
                 params={"api_key": self.token}
             )
             response.raise_for_status()
-            return {"status": "success operation", "data": "price limit coin is " + str(response.json()["price_limit"])}
+            return {"status": "success operation", "data": "price limit coin unit is " + str(response.json()["price_limit"])}
         except Exception as e:
             logger.error(f"Error getting price limit: {e}")
             return {"status": "error operation", "message": str(e)}

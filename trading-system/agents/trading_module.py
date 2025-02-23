@@ -92,7 +92,8 @@ def create_trading_executor_agent(
         backstory="""You are a trading executor responsible for placing and managing orders
         on the Bybit exchange. You ensure trades are executed with proper parameters and
         monitor their execution status.
-        (if quantity is zero you must use skip operation)""",
+        Give parameters of order (symbol, side, qty, price)
+        (if quantity is zero you must use skip operation and give (symbol, side, 0, 0))""",
         tools=[trading_tool],
         llm=llm,
         verbose=True,
@@ -125,7 +126,7 @@ def create_write_info_agent(
         goal="Write information about order to database",
         backstory="""You perform actions to record information about the result of the system.
         Your instruction of actions:
-        1) Create active coin lot and history coin lot if order is buy
+        1) Create active coin lot and create history coin lot if order is buy
         2) Delete active coin lot and create history coin lot if order is sell
         (if quantity is zero you must skip any operation)
         """,

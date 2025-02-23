@@ -17,7 +17,7 @@ class ManagementServiceInput(BaseModel):
     """Input schema for ManagementServiceTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (get_system_status, get_price_limit, get_balance, get_num_available_lots)"
+        description="Operation to perform (get_system_status, get_price_limit_coin_unit, get_balance, get_max_num_available_lots)"
     )
 
     model_config = ConfigDict(
@@ -30,7 +30,7 @@ class ReadDatabaseOperationInput(BaseModel):
     """Input schema for ReadDatabaseTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (create_lot, delete_lot, create_history_lot, get_symbols_active_lots, get_count_lots, get_qty_symbol_active_lot)"
+        description="Operation to perform (get_symbols_active_lots, get_count_active_lots, get_qty_symbol_active_lot)"
     )
     symbol: Optional[str] = Field('', description="Trading pair symbol")
 
@@ -44,7 +44,7 @@ class WriteDatabaseOperationInput(BaseModel):
     """Input schema for WriteDatabaseTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (create_lot, delete_lot, create_history_lot, get_symbols_active_lots, get_count_lots, get_qty_symbol_active_lot)"
+        description="Operation to perform (create_lot, delete_lot, create_history_lot)"
     )
     side: Optional[str] = Field('', description="Side type [Buy, Sell] (for history lots)")
     symbol: Optional[str] = Field('', description="Trading pair symbol")
@@ -59,7 +59,7 @@ class WriteDatabaseOperationInput(BaseModel):
 
 class BybitBalanceInput(BaseModel):
     """Input model for Bybit balance operations"""
-    operation: str = Field(default='', description="Operation to perform")
+    operation: str = Field(default='', description="Operation to perform (get_coin_info, skip_balance_operation)")
     symbol: Optional[str] = Field(default='', description="Trading pair symbol")
 
     model_config = ConfigDict(
@@ -70,7 +70,7 @@ class BybitBalanceInput(BaseModel):
 
 class BybitExecutorInput(BaseModel):
     """Input model for Bybit operations"""
-    operation: str = Field(default='', description="Operation to perform")
+    operation: str = Field(default='', description="Operation to perform (execute_trade, skip_trade_operation)")
     symbol: Optional[str] = Field(default='', description="Trading pair symbol")
     side: Optional[str] = Field(default='', description="Order side [Buy, Sell]")
     qty: Optional[float] = Field(default=0., description="Order quantity")
