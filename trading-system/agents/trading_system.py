@@ -111,7 +111,7 @@ class TradingSystem:
             balance_control_task = Task(
                 description="""Using the input data and taking into account the information from the database 
                 and the management service, it is necessary to calculate the best coin quantity.""",
-                expected_output="""Dict with parameters order (symbol, side, qty, price)""",
+                expected_output="""Dict with parameters of order (symbol, side, qty, price)""",
                 agent=self.balance_control_agent
             )
 
@@ -119,7 +119,7 @@ class TradingSystem:
                 description="""Execute trades on the exchange.
                 Place and manage orders with proper parameters.
                 Monitor order execution status.""",
-                expected_output="""Result parameters of order (side, symbol, qty, price)""",
+                expected_output="""Dict with parameters of order result (side, symbol, qty, price)""",
                 agent=self.trading_agent
             )
 

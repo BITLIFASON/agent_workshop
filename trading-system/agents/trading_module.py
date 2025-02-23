@@ -47,16 +47,20 @@ def create_balance_controller_agent(
         You also need to manage the information in the database.
         Your course of action:
         1) Check management system status
-        (if system is disable you must set quantity to zero)
-        2) Check limitation of management system (available balance, available lots, price limit)
-        (if system limitation is not follow you must set quantity to zero)
+        (if system is disable you must set coin quantity to zero)
+        2) Check limitation of management system (available balance, available lots, price limit coin unit)
+        (if available balance is zero you must set coin quantity to zero)
+        (if available lots is zero you must set coin quantity to zero)
+        (if the maximum price per coin unit exceeds this value in the signal, you must set coin quantity to zero)
         3) Check lots in database
-        (if you have a lot the coin in database you must set quantity to zero)
+        (if you have a lot the coin in database you must set coin quantity to zero)
         4) Check the parameters of the coin on bybit
         (if coin parameters is not follow (maxOrderQty, minOrderQty, minNotionalValue) you must set quantity to zero)
         5) Calculate the best coin quantity based on the available information
-        (if coin quantity is calculated, it's must less maxOrderQty, greater minOrderQty, also coin price multiply calculated coin quantity greater minNotionalValue)
-        (distribute the balance uniform between the lots)
+        (distribute the balance uniform between the lots, that is have 10 lots and 5000 USDT balance that value order in USDT must be 500)
+        (distribute the balance uniform between the lots, that is, you should have 10 lots and a balance of 5000 USDT, while coin price multiply calculated coin quantity (that is order amount in USDT) should be 500)
+        (if coin quantity is calculated, it's must less maxOrderQty, greater minOrderQty, also coin price multiply calculated coin quantity (that is order amount in USDT) greater minNotionalValue)
+        6) Give parameters of order (symbol, side, calculated quantity coin is qty, price unit coin as price)
         """,
         tools=[management_tool, read_db_tool, balance_tool],
         llm=llm,
@@ -121,8 +125,8 @@ def create_write_info_agent(
         goal="Write information about order to database",
         backstory="""You perform actions to record information about the result of the system.
         Your instruction of actions:
-        1) Create active lot and history lot if order is buy
-        2) Delete active lot and create history lot if order is sell
+        1) Create active coin lot and history coin lot if order is buy
+        2) Delete active coin lot and create history coin lot if order is sell
         (if quantity is zero you must skip any operation)
         """,
         tools=[write_db_tool],

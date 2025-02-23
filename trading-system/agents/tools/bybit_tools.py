@@ -11,7 +11,6 @@ class BybitBalanceTool(BaseTool):
     name: str = "bybit_balance"
     description: str = """Manage balance operations on Bybit exchange.
     Supported operations:
-    - get_current_coin_balance: Get coin balance, need symbol (e.g. MINAUSDT)
     - get_coin_info: Get coin trading information, need symbol (e.g. MINAUSDT)
     - skip_balance_operation: Skip balance operation
     """
@@ -43,10 +42,7 @@ class BybitBalanceTool(BaseTool):
             logger.info(f"[BybitBalanceTool] Arguments: {kwargs}")
 
             result = None
-            if operation == "get_current_coin_balance":
-                symbol = kwargs.get("symbol")
-                result = self._get_coin_balance(symbol)
-            elif operation == "get_coin_info":
+            if operation == "get_coin_info":
                 symbol = kwargs.get("symbol")
                 result = self._get_coin_info(symbol)
             elif operation == "skip_balance_operation":
@@ -66,22 +62,6 @@ class BybitBalanceTool(BaseTool):
             error_msg = f"Error in BybitBalanceTool: {e}"
             logger.error(error_msg)
             return {"result": error_msg}
-
-    def _get_coin_balance(self, symbol: str) -> Dict[str, Any]:
-        """Get coin balance"""
-        try:
-            coin = symbol[:-4]  # Remove USDT suffix
-            if coin not in [item['coin'] for item in self.client.get_wallet_balance(accountType="UNIFIED")["result"]["list"][0]['coin']]:
-                return {"success operation": True, "data": 0}
-            
-            symbol_wallet_balance = self.client.get_wallet_balance(
-                accountType="UNIFIED",
-                coin=coin
-            )["result"]["list"][0]["coin"][0]["walletBalance"]
-            symbol_wallet_balance = float(symbol_wallet_balance) if symbol_wallet_balance != '' else 0
-            return {"success operation": True, "data": symbol_wallet_balance}
-        except Exception as e:
-            return {"success operation": False, "error": str(e)}
 
     def _get_coin_info(self, symbol: str) -> Dict[str, Any]:
         """Get coin trading information"""
@@ -221,7 +201,7 @@ class BybitTradingTool(BaseTool):
                 retCode=result["retCode"],
                 retMsg=result["retMsg"],
                 orderId=result["result"]["orderId"],
-                orderLinkId=result["orderLinkId"],
+                orderLinkId=result["result"]["orderLinkId"],
                 retExtInfo=result["retExtInfo"],
                 time=result["time"]
             )
