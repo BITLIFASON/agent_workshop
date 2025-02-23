@@ -44,7 +44,7 @@ class WriteDatabaseOperationInput(BaseModel):
     """Input schema for WriteDatabaseTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (create_lot, delete_lot, create_history_lot)"
+        description="Operation to perform (create_lot, delete_lot, create_history_lot, skip_write_db_operation)"
     )
     side: Optional[str] = Field('', description="Side type [Buy, Sell] (for history lots)")
     symbol: Optional[str] = Field('', description="Trading pair symbol")
