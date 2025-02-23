@@ -17,7 +17,7 @@ class ManagementServiceInput(BaseModel):
     """Input schema for ManagementServiceTool"""
     operation: str = Field(
         default='',
-        description="Operation to perform (get_system_status, get_price_limit_coin_unit, get_balance, get_max_num_available_lots)"
+        description="Operation to perform (get_system_status, get_balance, get_max_num_available_lots)"
     )
 
     model_config = ConfigDict(

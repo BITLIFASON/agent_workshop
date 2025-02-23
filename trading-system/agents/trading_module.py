@@ -61,6 +61,7 @@ def create_balance_controller_agent(
         (distribute the balance uniform between the lots, that is, you should have 10 lots and a balance of 5000 USDT, while coin price multiply calculated coin quantity (that is order amount in USDT) should be 500)
         (if coin quantity is calculated, it's must less maxOrderQty, greater minOrderQty, also coin price multiply calculated coin quantity (that is order amount in USDT) greater minNotionalValue)
         6) Give parameters of order (symbol, side, calculated quantity coin is qty, price unit coin as price)
+        (if quantity is zero you must use skip operation and give (symbol, side, 0, 0))
         """,
         tools=[management_tool, read_db_tool, balance_tool],
         llm=llm,

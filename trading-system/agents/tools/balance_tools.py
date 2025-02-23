@@ -197,7 +197,6 @@ class ManagementServiceTool(BaseTool):
     description: str = """Tool for management service operations.
     Supported operations:
     - get_system_status: Get system status from management service
-    - get_price_limit_coin_unit: Get price limit for coin unit from management service
     - get_balance: Get available balance account from management service
     - get_max_num_available_lots: Get maximum number of available lots from management service
     """
@@ -232,8 +231,6 @@ class ManagementServiceTool(BaseTool):
             result = None
             if operation == "get_system_status":
                 result = self._get_system_status()
-            elif operation == "get_price_limit_coin_unit":
-                result = self._get_price_limit_coin_unit()
             elif operation == "get_balance":
                 result = self._get_balance()
             elif operation == "get_max_num_available_lots":
@@ -270,19 +267,6 @@ class ManagementServiceTool(BaseTool):
             error_msg = f"Error getting system status: {e}"
             logger.error(f"[ManagementServiceTool] {error_msg}")
             return {"status": "error operation", "message": error_msg}
-
-    def _get_price_limit_coin_unit(self) -> Dict[str, Any]:
-        """Get price limit from management service"""
-        try:
-            response = requests.get(
-                f"{self.base_url}/get_price_limit",
-                params={"api_key": self.token}
-            )
-            response.raise_for_status()
-            return {"status": "success operation", "data": "price limit coin unit is " + str(response.json()["price_limit"])}
-        except Exception as e:
-            logger.error(f"Error getting price limit: {e}")
-            return {"status": "error operation", "message": str(e)}
 
     def _get_balance(self) -> Dict[str, Any]:
         """Get balance from management service"""
