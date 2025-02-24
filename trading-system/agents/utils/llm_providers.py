@@ -68,7 +68,7 @@ class OpenAIProvider(BaseLLMProvider):
         return LLM(
             model=self.model,
             temperature=temperature,
-            base_url="https://api.openai.com/v1",
+            base_url="https://api.openai.com/v1/chat/completions",
             api_key=self.api_key
         )
 
