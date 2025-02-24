@@ -171,7 +171,7 @@ class MistralProvider(BaseLLMProvider):
 class OllamaProvider(BaseLLMProvider):
     """Ollama LLM provider"""
     
-    def __init__(self, model: str = "llama2"):
+    def __init__(self, model: str = "llama3"):
         self.base_url = "http://ollama:11434"
         self.model = model
         
