@@ -136,6 +136,7 @@ class TradingSystem:
                 agents=[self.parser_agent, self.balance_control_agent, self.trading_agent, self.writer_info_agent],
                 tasks=[signal_parsing_task, balance_control_task, trading_execution_task, writing_info_task],
                 process=Process.sequential,
+                cache=False,
                 verbose=True
             )
 

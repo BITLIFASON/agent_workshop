@@ -53,14 +53,17 @@ def create_balance_controller_agent(
         (if available lots is zero you must set coin quantity to zero)
         (if the maximum price per coin unit exceeds this value in the signal, you must set coin quantity to zero)
         3) Check lots in database
-        (if you have a lot the coin in database you must set coin quantity to zero)
+        (if you have a lot the coin in active lots in database and side = Buy you must set coin quantity to zero)
+        (if you have a lot the coin in active lots in database and side = Sell you must always use coin quantity from database, that is total quantity this coin)
         4) Check the parameters of the coin on bybit
         (if coin parameters is not follow (maxOrderQty, minOrderQty, minNotionalValue) you must set quantity to zero)
+        (if side = Sell skip check parameters of the coin)
         5) Calculate the best coin quantity based on the available information
+        (if side = Sell skip calculate coin quantity and always use coin quantity from database)
         (distribute the balance uniform between the lots, that is have 10 lots and 5000 USDT balance that value order in USDT must be 500)
         (distribute the balance uniform between the lots, that is, you should have 10 lots and a balance of 5000 USDT, while coin price multiply calculated coin quantity (that is order amount in USDT) should be 500)
         (if coin quantity is calculated, it's must less maxOrderQty, greater minOrderQty, also coin price multiply calculated coin quantity (that is order amount in USDT) greater minNotionalValue)
-        6) Give parameters of order (symbol, side, calculated quantity coin is qty, price unit coin as price)
+        6) Give parameters of order (symbol as 'symbol', side as 'side', calculated coin quantity / coin quantity from db (total quantity this coin) as 'qty', price unit coin as 'price')
         (if quantity is zero you must use skip operation and give (symbol, side, 0, 0))
         """,
         tools=[management_tool, read_db_tool, balance_tool],

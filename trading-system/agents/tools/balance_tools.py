@@ -126,7 +126,7 @@ class ReadDatabaseTool(BaseTool):
                 result = self._get_count_active_lots()
             elif operation == "get_qty_symbol_active_lot":
                 symbol = kwargs.get('symbol')
-                result = self._get_qty_symbol_active_lotl(symbol)
+                result = self._get_qty_symbol_active_lot(symbol)
             else:
                 result = {"status": "error operation", "message": f"Unknown operation: {operation}"}
 
