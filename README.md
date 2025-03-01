@@ -11,7 +11,7 @@
 
 ## 🛠 Технологии
 
-- Основная LLM: 🧠 Qwen2.5:7b-instruct
+- Основная LLM: 🧠 Qwen2.5:14b-instruct
 - Инференс LLM: 🦙 Ollama
 - Фреймворк:  <img src="https://i.imgur.com/0F5MqR8.png" width="15"> Crew AI
 - База данных: 🐘 PostgreSQL
